@@ -12,7 +12,7 @@ export const useAuth = () => {
   return context;
 };
 
-// Configure axios defaults - Use full backend URL for development
+// Configure axios defaults - and connectinG backend frontend
 const isDevelopment = process.env.NODE_ENV === 'development';
 axios.defaults.baseURL = isDevelopment ? 'http://localhost:5000/api' : '/api';
 
