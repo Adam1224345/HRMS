@@ -7,10 +7,8 @@ import string
 
 auth_bp = Blueprint('auth', __name__)
 
-# In-memory stores
 blacklisted_tokens = set()
 reset_tokens = {}
-
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
@@ -416,7 +414,7 @@ def reset_password():
         return jsonify({'error': str(e)}), 500
 
 
-# JWT token blacklist checker
+
 def check_if_token_revoked(jwt_header, jwt_payload):
     """Check if JWT token is blacklisted"""
     jti = jwt_payload['jti']
