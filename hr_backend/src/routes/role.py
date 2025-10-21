@@ -25,7 +25,7 @@ def require_permission(permission_name):
     return decorator
 
 
-# ---------- ROLE MANAGEMENT ---------- #
+#  ROLE MANAGEMENT  #
 
 @role_bp.route('/roles', methods=['GET'])
 @require_permission('role_read')
