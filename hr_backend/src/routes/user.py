@@ -5,9 +5,6 @@ from functools import wraps
 
 user_bp = Blueprint('user', __name__)
 
-# -----------------------------------
-# ✅ FIXED: Make JWT OPTIONAL in DEBUG mode
-# -----------------------------------
 def optional_jwt_required(func):
     """
     Skip JWT check in DEBUG mode (for Swagger/cURL testing)
@@ -20,9 +17,6 @@ def optional_jwt_required(func):
         return jwt_required()(func)(*args, **kwargs)
     return wrapper
 
-# -----------------------------------
-# ✅ FIXED: Permission Decorator (SKIPS in DEBUG mode)
-# -----------------------------------
 def require_permission(permission_name):
     """Decorator to check if user has required permission - SKIPS in DEBUG"""
     def decorator(f):
