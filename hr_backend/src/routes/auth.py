@@ -1,27 +1,16 @@
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, get_jwt
 from src.models.user import User, Role, db
 from datetime import timedelta
 import secrets
 import string
-from functools import wraps
 
 auth_bp = Blueprint('auth', __name__)
 
+# In-memory stores
 blacklisted_tokens = set()
 reset_tokens = {}
 
-def optional_jwt_required(func):
-    """
-    JWT check in DEBUG mode (for Swagger/cURL testing)
-    """
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        if current_app.config.get("DEBUG", False):
-            # In DEBUG mode: Skip JWT - return empty user context
-            return func(*args, **kwargs)
-        return jwt_required()(func)(*args, **kwargs)
-    return wrapper
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
@@ -160,13 +149,15 @@ def login():
 
 
 @auth_bp.route('/logout', methods=['POST'])
-@optional_jwt_required
+@jwt_required()
 def logout():
     """
     Logout user by blacklisting the JWT token
     ---
     tags:
       - Authentication
+    security:
+      - Bearer: []
     responses:
       200:
         description: Successfully logged out
@@ -174,10 +165,6 @@ def logout():
         description: Server error
     """
     try:
-        if current_app.config.get("DEBUG", False):
-           
-            return jsonify({'message': 'Successfully logged out '}), 200
-        
         jti = get_jwt()['jti']
         blacklisted_tokens.add(jti)
         return jsonify({'message': 'Successfully logged out'}), 200
@@ -186,13 +173,15 @@ def logout():
 
 
 @auth_bp.route('/profile', methods=['GET'])
-@optional_jwt_required
+@jwt_required()
 def get_profile():
     """
     Get current user's profile
     ---
     tags:
       - Authentication
+    security:
+      - Bearer: []
     responses:
       200:
         description: User profile returned successfully
@@ -202,13 +191,6 @@ def get_profile():
         description: Server error
     """
     try:
-        if current_app.config.get("DEBUG", False):
-        
-            user = User.query.first()
-            if not user:
-                return jsonify({'error': 'No users in database'}), 404
-            return jsonify({'user': user.to_dict(include_roles=True)}), 200
-        
         user_id = int(get_jwt_identity())
         user = User.query.get(user_id)
         if not user:
@@ -219,13 +201,15 @@ def get_profile():
 
 
 @auth_bp.route('/profile', methods=['PUT'])
-@optional_jwt_required
+@jwt_required()
 def update_profile():
     """
     Update current user's profile
     ---
     tags:
       - Authentication
+    security:
+      - Bearer: []
     parameters:
       - name: body
         in: body
@@ -253,13 +237,8 @@ def update_profile():
         description: Server error
     """
     try:
-        if current_app.config.get("DEBUG", False):
-            user = User.query.first()
-        else:
-
-            user_id = int(get_jwt_identity())
-            user = User.query.get(user_id)
-        
+        user_id = int(get_jwt_identity())
+        user = User.query.get(user_id)
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
@@ -269,7 +248,7 @@ def update_profile():
         if 'last_name' in data:
             user.last_name = data['last_name']
         if 'email' in data:
-            existing_user = User.query.filter(User.email == data['email'], User.id != user.id).first()
+            existing_user = User.query.filter(User.email == data['email'], User.id != user_id).first()
             if existing_user:
                 return jsonify({'error': 'Email already exists'}), 400
             user.email = data['email']
@@ -282,13 +261,15 @@ def update_profile():
 
 
 @auth_bp.route('/change-password', methods=['POST'])
-@optional_jwt_required
+@jwt_required()
 def change_password():
     """
     Change user's password
     ---
     tags:
       - Authentication
+    security:
+      - Bearer: []
     parameters:
       - name: body
         in: body
@@ -316,25 +297,17 @@ def change_password():
         description: Server error
     """
     try:
-        if current_app.config.get("DEBUG", False):
+        user_id = int(get_jwt_identity())
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
 
-            user = User.query.first()
-            data = request.get_json()
-            if not data.get('new_password'):
-                return jsonify({'error': 'New password is required'}), 400
-        else:
+        data = request.get_json()
+        if not data.get('current_password') or not data.get('new_password'):
+            return jsonify({'error': 'Current password and new password are required'}), 400
 
-            user_id = int(get_jwt_identity())
-            user = User.query.get(user_id)
-            if not user:
-                return jsonify({'error': 'User not found'}), 404
-
-            data = request.get_json()
-            if not data.get('current_password') or not data.get('new_password'):
-                return jsonify({'error': 'Current password and new password are required'}), 400
-
-            if not user.check_password(data['current_password']):
-                return jsonify({'error': 'Current password is incorrect'}), 400
+        if not user.check_password(data['current_password']):
+            return jsonify({'error': 'Current password is incorrect'}), 400
 
         user.set_password(data['new_password'])
         db.session.commit()
@@ -443,6 +416,7 @@ def reset_password():
         return jsonify({'error': str(e)}), 500
 
 
+# JWT token blacklist checker
 def check_if_token_revoked(jwt_header, jwt_payload):
     """Check if JWT token is blacklisted"""
     jti = jwt_payload['jti']
