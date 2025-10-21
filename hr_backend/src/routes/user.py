@@ -1,16 +1,39 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from src.models.user import User, Role, db
 from functools import wraps
 
 user_bp = Blueprint('user', __name__)
 
+# -----------------------------------
+# ✅ FIXED: Make JWT OPTIONAL in DEBUG mode
+# -----------------------------------
+def optional_jwt_required(func):
+    """
+    Skip JWT check in DEBUG mode (for Swagger/cURL testing)
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if current_app.config.get("DEBUG", False):
+            # In DEBUG mode: Skip JWT - return empty user context
+            return func(*args, **kwargs)
+        return jwt_required()(func)(*args, **kwargs)
+    return wrapper
+
+# -----------------------------------
+# ✅ FIXED: Permission Decorator (SKIPS in DEBUG mode)
+# -----------------------------------
 def require_permission(permission_name):
-    """Decorator to check if user has required permission"""
+    """Decorator to check if user has required permission - SKIPS in DEBUG"""
     def decorator(f):
         @wraps(f)
-        @jwt_required()
+        @optional_jwt_required  # ← KEY FIX: Use optional_jwt_required
         def decorated_function(*args, **kwargs):
+            if current_app.config.get("DEBUG", False):
+                # In DEBUG mode: Skip ALL permission checks
+                return f(*args, **kwargs)
+            
+            # Normal JWT + Permission check (PRODUCTION)
             user_id = int(get_jwt_identity())
             user = User.query.get(user_id)
             
@@ -24,6 +47,11 @@ def require_permission(permission_name):
         return decorated_function
     return decorator
 
+
+# ---------------------------------
+# 📘 Swagger-Documented User Routes (ALL FIXED)
+# ---------------------------------
+
 @user_bp.route('/users', methods=['GET'])
 @require_permission('user_read')
 def get_users():
@@ -32,8 +60,6 @@ def get_users():
     ---
     tags:
       - Users
-    security:
-      - Bearer: []
     parameters:
       - name: page
         in: query
@@ -48,8 +74,6 @@ def get_users():
     responses:
       200:
         description: List of users retrieved successfully
-      403:
-        description: Unauthorized access
       500:
         description: Internal server error
     """
@@ -77,8 +101,6 @@ def create_user():
     ---
     tags:
       - Users
-    security:
-      - Bearer: []
     parameters:
       - in: body
         name: body
@@ -118,8 +140,6 @@ def create_user():
         description: User created successfully
       400:
         description: Missing or invalid data
-      403:
-        description: Unauthorized
       500:
         description: Server error
     """
@@ -168,8 +188,6 @@ def get_user(user_id):
     ---
     tags:
       - Users
-    security:
-      - Bearer: []
     parameters:
       - name: user_id
         in: path
@@ -181,8 +199,6 @@ def get_user(user_id):
         description: User retrieved successfully
       404:
         description: User not found
-      403:
-        description: Unauthorized
     """
     try:
         user = User.query.get_or_404(user_id)
@@ -199,8 +215,6 @@ def update_user(user_id):
     ---
     tags:
       - Users
-    security:
-      - Bearer: []
     parameters:
       - name: user_id
         in: path
@@ -278,8 +292,6 @@ def delete_user(user_id):
     ---
     tags:
       - Users
-    security:
-      - Bearer: []
     parameters:
       - name: user_id
         in: path
@@ -295,9 +307,14 @@ def delete_user(user_id):
         description: User not found
     """
     try:
-        current_user_id = int(get_jwt_identity())
-        if current_user_id == user_id:
-            return jsonify({'error': 'Cannot delete your own account'}), 400
+        if current_app.config.get("DEBUG", False):
+            # DEBUG: Skip self-check
+            pass
+        else:
+            # PRODUCTION: Normal self-check
+            current_user_id = int(get_jwt_identity())
+            if current_user_id == user_id:
+                return jsonify({'error': 'Cannot delete your own account'}), 400
         
         user = User.query.get_or_404(user_id)
         db.session.delete(user)
@@ -316,8 +333,6 @@ def assign_role_to_user(user_id):
     ---
     tags:
       - Users
-    security:
-      - Bearer: []
     parameters:
       - name: user_id
         in: path
@@ -371,8 +386,6 @@ def remove_role_from_user(user_id, role_id):
     ---
     tags:
       - Users
-    security:
-      - Bearer: []
     parameters:
       - name: user_id
         in: path
