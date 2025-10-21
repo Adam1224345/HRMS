@@ -49,11 +49,14 @@ def get_leaves():
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
+        # Admin and HR can see all leave requests
         if has_role(user, 'Admin') or has_role(user, 'HR'):
             leaves = Leave.query.all()
         else:
+            # Employees can only see their own leave requests
             leaves = Leave.query.filter_by(user_id=current_user_id).all()
 
+        # Pagination and filtering
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 10, type=int)
         status_filter = request.args.get('status', None)
@@ -107,6 +110,7 @@ def get_leave(leave_id):
         if not leave:
             return jsonify({'error': 'Leave request not found'}), 404
 
+        # Permission check
         if not (has_role(user, 'Admin') or has_role(user, 'HR') or leave.user_id == current_user_id):
             return jsonify({'error': 'Insufficient permissions'}), 403
 
@@ -114,7 +118,6 @@ def get_leave(leave_id):
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
 @leave_bp.route('/leaves', methods=['POST'])
 @jwt_required()
 def create_leave():
@@ -162,6 +165,7 @@ def create_leave():
             if not data.get(field):
                 return jsonify({'error': f'{field} is required'}), 400
 
+        # Validate dates
         start_date = datetime.strptime(data['start_date'], '%Y-%m-%d').date()
         end_date = datetime.strptime(data['end_date'], '%Y-%m-%d').date()
 
@@ -188,7 +192,6 @@ def create_leave():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
-
 @leave_bp.route('/leaves/<int:leave_id>', methods=['PUT'])
 @jwt_required()
 def update_leave(leave_id):
@@ -232,7 +235,6 @@ def update_leave(leave_id):
             return jsonify({'error': 'Leave request not found'}), 404
 
         data = request.get_json()
-
         if has_role(user, 'Admin') or has_role(user, 'HR'):
             if 'status' in data:
                 if data['status'] not in ['Pending', 'Approved', 'Rejected']:
@@ -241,7 +243,6 @@ def update_leave(leave_id):
                 leave.reviewed_by_id = current_user_id
             if 'remarks' in data:
                 leave.remarks = data['remarks']
-
         elif leave.user_id == current_user_id and leave.status == 'Pending':
             if 'leave_type' in data:
                 leave.leave_type = data['leave_type']
@@ -266,7 +267,6 @@ def update_leave(leave_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
-
 @leave_bp.route('/leaves/<int:leave_id>', methods=['DELETE'])
 @jwt_required()
 def delete_leave(leave_id):
@@ -296,6 +296,7 @@ def delete_leave(leave_id):
         if not leave:
             return jsonify({'error': 'Leave request not found'}), 404
 
+        # Admin can delete any leave, employee only their pending one
         if not (has_role(user, 'Admin') or (leave.user_id == current_user_id and leave.status == 'Pending')):
             return jsonify({'error': 'Insufficient permissions'}), 403
 
@@ -307,7 +308,6 @@ def delete_leave(leave_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
-
 @leave_bp.route('/leaves/<int:leave_id>/approve', methods=['POST'])
 @jwt_required()
 def approve_leave(leave_id):
@@ -339,8 +339,6 @@ def approve_leave(leave_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
-
-
 @leave_bp.route('/leaves/<int:leave_id>/reject', methods=['POST'])
 @jwt_required()
 def reject_leave(leave_id):
