@@ -7,9 +7,6 @@ from functools import wraps
 
 task_bp = Blueprint('task', __name__)
 
-# -----------------------------------
-# ✅ FIXED: Make JWT OPTIONAL in DEBUG mode
-# -----------------------------------
 def optional_jwt_required(func):
     """
     Skip JWT check in DEBUG mode (for Swagger/cURL testing)
@@ -30,9 +27,6 @@ def has_role(user, role_name):
     """Check if user has specific role"""
     return any(role.name == role_name for role in user.roles)
 
-# ------------------------------------
-# ✅ FIXED: Skip auth checks in DEBUG mode
-# ------------------------------------
 def debug_skip_auth(func):
     """
     Skip ALL auth checks in DEBUG mode
@@ -46,9 +40,6 @@ def debug_skip_auth(func):
     return wrapper
 
 
-# ------------------------------------
-# 📘 Swagger-Documented Task Endpoints (ALL FIXED)
-# ------------------------------------
 
 @task_bp.route('/tasks', methods=['GET'])
 @optional_jwt_required
