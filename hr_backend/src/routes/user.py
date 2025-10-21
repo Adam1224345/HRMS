@@ -24,11 +24,6 @@ def require_permission(permission_name):
         return decorated_function
     return decorator
 
-
-# ---------------------------------
-# 📘 Swagger-Documented User Routes
-# ---------------------------------
-
 @user_bp.route('/users', methods=['GET'])
 @require_permission('user_read')
 def get_users():
