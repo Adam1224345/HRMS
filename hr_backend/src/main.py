@@ -27,15 +27,16 @@ CORS(app)
 db.init_app(app)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
 
-# -------------------- Swagger Configuration -------------------- #
+# -------------------- Swagger Configuration - FIXED! -------------------- #
 app.config['SWAGGER'] = {
     'title': 'HRMS API Documentation',
     'uiversion': 3,
-    'openapi': '3.0.2'  # Added for OpenAPI 3.0 support
+    'openapi': '3.0.2'
 }
 
+# ✅ FIXED: Correct paths - NO DOUBLE /api/api/
 swagger_template = {
-    "openapi": "3.0.2",  # Added for OpenAPI 3.0
+    "openapi": "3.0.2",
     "info": {
         "title": "HRMS API Documentation",
         "description": "This is the Swagger UI for the Human Resource Management System backend.",
@@ -45,13 +46,61 @@ swagger_template = {
             "email": "support@hrms.com",
         },
     },
-    "servers": [  # Replaced basePath, host, schemes for OpenAPI 3.0
+    "servers": [
         {
-            "url": "https://hrms-wine-two.vercel.app/api"
+            "url": "https://hrms-wine-two.vercel.app"
         }
-    ]
+    ],
+    "paths": {
+        "/api/auth/login": {
+            "post": {
+                "tags": ["Authentication"],
+                "summary": "User Login",
+                "description": "Login user and return JWT token",
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "username": {"type": "string"},
+                                    "password": {"type": "string"}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/register": {
+            "post": {
+                "tags": ["Authentication"],
+                "summary": "User Registration",
+                "description": "Register new user",
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "username": {"type": "string"},
+                                    "email": {"type": "string"},
+                                    "first_name": {"type": "string"},
+                                    "last_name": {"type": "string"},
+                                    "password": {"type": "string"}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
+# ✅ FIXED: No template basePath - lets blueprints handle paths
 swagger = Swagger(app, template=swagger_template)
 
 # -------------------- Register Blueprints -------------------- #
