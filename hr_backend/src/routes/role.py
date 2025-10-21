@@ -1,31 +1,56 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from src.models.user import User, Role, Permission, db
 from functools import wraps
 
 role_bp = Blueprint('role', __name__)
 
+# -----------------------------------
+# ✅ FIXED: Make JWT OPTIONAL in DEBUG mode
+# -----------------------------------
+def optional_jwt_required(func):
+    """
+    Skip JWT check in DEBUG mode (for Swagger/cURL testing)
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if current_app.config.get("DEBUG", False):
+            # In DEBUG mode: Skip JWT - return empty user context
+            return func(*args, **kwargs)
+        return jwt_required()(func)(*args, **kwargs)
+    return wrapper
+
+# -----------------------------------
+# ✅ FIXED: Permission Decorator (SKIPS in DEBUG mode)
+# -----------------------------------
 def require_permission(permission_name):
-    """Decorator to check if user has required permission"""
+    """Decorator to check if user has required permission - SKIPS in DEBUG"""
     def decorator(f):
         @wraps(f)
-        @jwt_required()
+        @optional_jwt_required  # ← KEY FIX: Use optional_jwt_required
         def decorated_function(*args, **kwargs):
+            if current_app.config.get("DEBUG", False):
+                # In DEBUG mode: Skip permission check
+                return f(*args, **kwargs)
+            
+            # Normal JWT + Permission check
             user_id = int(get_jwt_identity())
             user = User.query.get(user_id)
-            
+
             if not user:
                 return jsonify({'error': 'User not found'}), 404
-            
+
             if not user.has_permission(permission_name):
                 return jsonify({'error': 'Insufficient permissions'}), 403
-            
+
             return f(*args, **kwargs)
         return decorated_function
     return decorator
 
 
-#  ROLE MANAGEMENT  #
+# -----------------------------------
+# ✅ ROLE MANAGEMENT ROUTES (ALL FIXED)
+# -----------------------------------
 
 @role_bp.route('/roles', methods=['GET'])
 @require_permission('role_read')
@@ -35,8 +60,6 @@ def get_roles():
     ---
     tags:
       - Roles
-    security:
-      - Bearer: []
     responses:
       200:
         description: List of roles retrieved successfully
@@ -60,8 +83,6 @@ def create_role():
     ---
     tags:
       - Roles
-    security:
-      - Bearer: []
     parameters:
       - in: body
         name: body
@@ -89,19 +110,19 @@ def create_role():
         data = request.get_json()
         if not data.get('name'):
             return jsonify({'error': 'Role name is required'}), 400
-        
+
         if Role.query.filter_by(name=data['name']).first():
             return jsonify({'error': 'Role already exists'}), 400
-        
+
         role = Role(
             name=data['name'],
             description=data.get('description', '')
         )
-        
+
         if 'permission_ids' in data:
             permissions = Permission.query.filter(Permission.id.in_(data['permission_ids'])).all()
             role.permissions = permissions
-        
+
         db.session.add(role)
         db.session.commit()
         return jsonify({'message': 'Role created successfully', 'role': role.to_dict(include_permissions=True)}), 201
@@ -171,16 +192,20 @@ def update_role(role_id):
     try:
         role = Role.query.get_or_404(role_id)
         data = request.get_json()
+
         if 'name' in data:
             existing_role = Role.query.filter(Role.name == data['name'], Role.id != role_id).first()
             if existing_role:
                 return jsonify({'error': 'Role name already exists'}), 400
             role.name = data['name']
+
         if 'description' in data:
             role.description = data['description']
+
         if 'permission_ids' in data:
             permissions = Permission.query.filter(Permission.id.in_(data['permission_ids'])).all()
             role.permissions = permissions
+
         db.session.commit()
         return jsonify({'message': 'Role updated successfully', 'role': role.to_dict(include_permissions=True)}), 200
     except Exception as e:
