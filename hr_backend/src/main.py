@@ -13,27 +13,29 @@ from src.routes.role import role_bp
 from src.routes.task import task_bp
 from src.routes.leave import leave_bp
 
-# Flask App Config #
+# -------------------- Flask App Config -------------------- #
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-#Initialize Extensions #
+# -------------------- Initialize Extensions -------------------- #
 jwt = JWTManager(app)
 bcrypt.init_app(app)
 CORS(app)
 db.init_app(app)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
 
-#  Swagger Configuration  #
+# -------------------- Swagger Configuration -------------------- #
 app.config['SWAGGER'] = {
     'title': 'HRMS API Documentation',
-    'uiversion': 3
+    'uiversion': 3,
+    'openapi': '3.0.2'  # Added for OpenAPI 3.0 support
 }
 
 swagger_template = {
+    "openapi": "3.0.2",  # Added for OpenAPI 3.0
     "info": {
         "title": "HRMS API Documentation",
         "description": "This is the Swagger UI for the Human Resource Management System backend.",
@@ -43,20 +45,23 @@ swagger_template = {
             "email": "support@hrms.com",
         },
     },
-    "basePath": "/api",
-    "schemes": ["http", "https"],
+    "servers": [  # Replaced basePath, host, schemes for OpenAPI 3.0
+        {
+            "url": "https://hrms-wine-two.vercel.app/api"
+        }
+    ]
 }
 
 swagger = Swagger(app, template=swagger_template)
 
-#  Register Blueprints  #
+# -------------------- Register Blueprints -------------------- #
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(role_bp, url_prefix='/api')
 app.register_blueprint(task_bp, url_prefix='/api')
 app.register_blueprint(leave_bp, url_prefix='/api')
 
-#  Database Initialization #
+# -------------------- Database Initialization -------------------- #
 def init_database():
     """Initialize database with default roles and permissions"""
     from src.models.user import Role, Permission
@@ -121,7 +126,7 @@ with app.app_context():
     db.create_all()
     init_database()
 
-#  Test Swagger Route  #
+# -------------------- Test Swagger Route -------------------- #
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
     """
@@ -137,7 +142,7 @@ def hello_world():
     """
     return jsonify({"message": "Hello, Swagger is working!"})
 
-#  Serve Frontend  #
+# -------------------- Serve Frontend -------------------- #
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
@@ -154,6 +159,6 @@ def serve(path):
         else:
             return "index.html not found", 404
 
-#  Run App  #
+# -------------------- Run App -------------------- #
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
