@@ -15,10 +15,6 @@ def has_role(user, role_name):
     return any(role.name == role_name for role in user.roles)
 
 
-# ------------------------------------
-# 📘 Swagger-Documented Task Endpoints
-# ------------------------------------
-
 @task_bp.route('/tasks', methods=['GET'])
 @jwt_required()
 def get_tasks():
