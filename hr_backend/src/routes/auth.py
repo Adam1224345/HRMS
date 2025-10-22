@@ -416,7 +416,6 @@ def reset_password():
         return jsonify({'error': str(e)}), 500
 
 
-# JWT token blacklist checker
 def check_if_token_revoked(jwt_header, jwt_payload):
     """Check if JWT token is blacklisted"""
     jti = jwt_payload['jti']
