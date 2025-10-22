@@ -18,16 +18,14 @@ def optional_jwt_required(func):
     return wrapper
 
 def require_permission(permission_name):
-    """Decorator to check if user has required permission - SKIPS in DEBUG"""
+    
     def decorator(f):
         @wraps(f)
         @optional_jwt_required  # ← KEY FIX: Use optional_jwt_required
         def decorated_function(*args, **kwargs):
             if current_app.config.get("DEBUG", False):
-                # In DEBUG mode: Skip permission check
-                return f(*args, **kwargs)
+            return f(*args, **kwargs)
             
-            # Normal JWT + Permission check
             user_id = int(get_jwt_identity())
             user = User.query.get(user_id)
 
