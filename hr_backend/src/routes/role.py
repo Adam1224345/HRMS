@@ -5,12 +5,9 @@ from functools import wraps
 
 role_bp = Blueprint('role', __name__)
 
-# -----------------------------------
-# ✅ FIXED: Make JWT OPTIONAL in DEBUG mode
-# -----------------------------------
 def optional_jwt_required(func):
     """
-    Skip JWT check in DEBUG mode (for Swagger/cURL testing)
+    JWT check (for Swagger/cURL testing)
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -20,9 +17,6 @@ def optional_jwt_required(func):
         return jwt_required()(func)(*args, **kwargs)
     return wrapper
 
-# -----------------------------------
-# ✅ FIXED: Permission Decorator (SKIPS in DEBUG mode)
-# -----------------------------------
 def require_permission(permission_name):
     """Decorator to check if user has required permission - SKIPS in DEBUG"""
     def decorator(f):
@@ -47,10 +41,6 @@ def require_permission(permission_name):
         return decorated_function
     return decorator
 
-
-# -----------------------------------
-# ✅ ROLE MANAGEMENT ROUTES (ALL FIXED)
-# -----------------------------------
 
 @role_bp.route('/roles', methods=['GET'])
 @require_permission('role_read')
