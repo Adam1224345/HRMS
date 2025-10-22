@@ -8,30 +8,34 @@ from functools import wraps
 task_bp = Blueprint('task', __name__)
 
 def optional_jwt_required(func):
+    """
+    Skip JWT check in DEBUG mode (for Swagger/cURL testing)
+    """
     @wraps(func)
     def wrapper(*args, **kwargs):
         if current_app.config.get("DEBUG", False):
-            # In DEBUG mode: Skip JWT - return empty user context
             return func(*args, **kwargs)
         return jwt_required()(func)(*args, **kwargs)
     return wrapper
 
 def has_permission(user, permission_name):
+    """Check if user has specific permission"""
     return user.has_permission(permission_name)
 
 def has_role(user, role_name):
+    """Check if user has specific role"""
     return any(role.name == role_name for role in user.roles)
 
 def debug_skip_auth(func):
+    """
+    Skip ALL auth checks in DEBUG mode
+    """
     @wraps(func)
     def wrapper(*args, **kwargs):
         if current_app.config.get("DEBUG", False):
-    
             return func(*args, **kwargs)
         return func(*args, **kwargs)
     return wrapper
-
-
 
 @task_bp.route('/tasks', methods=['GET'])
 @optional_jwt_required
@@ -61,10 +65,8 @@ def get_tasks():
     """
     try:
         if current_app.config.get("DEBUG", False):
-            # DEBUG: Show ALL tasks (no auth)
             tasks = Task.query.all()
         else:
-            # PRODUCTION: Normal auth logic
             current_user_id = get_jwt_identity()
             user = User.query.get(current_user_id)
             if not user:
@@ -117,10 +119,8 @@ def get_task(task_id):
     """
     try:
         if current_app.config.get("DEBUG", False):
-            # DEBUG: Show ANY task
             task = Task.query.get(task_id)
         else:
-            # PRODUCTION: Normal auth logic
             current_user_id = get_jwt_identity()
             user = User.query.get(current_user_id)
             task = Task.query.get(task_id)
@@ -183,10 +183,8 @@ def create_task():
     """
     try:
         if current_app.config.get("DEBUG", False):
-            # DEBUG: Allow ANY user to create tasks
-            current_user_id = 1  # Fake Admin ID
+            current_user_id = 1
         else:
-            # PRODUCTION: Normal auth logic
             current_user_id = get_jwt_identity()
             user = User.query.get(current_user_id)
             if not (has_role(user, 'Admin') or has_role(user, 'HR')):
@@ -265,10 +263,9 @@ def update_task(task_id):
     """
     try:
         if current_app.config.get("DEBUG", False):
-            # DEBUG: Allow ANY updates
-            current_user_id = 1  # Fake Admin ID
+            current_user_id = 1  
         else:
-            # PRODUCTION: Normal auth logic
+            
             current_user_id = get_jwt_identity()
             user = User.query.get(current_user_id)
 
@@ -278,7 +275,6 @@ def update_task(task_id):
 
         data = request.get_json()
         if current_app.config.get("DEBUG", False):
-            # DEBUG: Allow ALL updates
             if 'title' in data:
                 task.title = data['title']
             if 'description' in data:
@@ -301,7 +297,6 @@ def update_task(task_id):
                 else:
                     task.due_date = None
         else:
-            # PRODUCTION: Normal permission logic
             if has_role(user, 'Admin') or has_role(user, 'HR'):
                 if 'title' in data:
                     task.title = data['title']
@@ -360,10 +355,8 @@ def delete_task(task_id):
     """
     try:
         if current_app.config.get("DEBUG", False):
-            # DEBUG: Allow ANY deletion
-            pass
+              pass
         else:
-            # PRODUCTION: Normal auth logic
             current_user_id = get_jwt_identity()
             user = User.query.get(current_user_id)
 
