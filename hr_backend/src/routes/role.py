@@ -7,25 +7,23 @@ role_bp = Blueprint('role', __name__)
 
 def optional_jwt_required(func):
     """
-    JWT check (for Swagger/cURL testing)
+    JWT check  (for Swagger/cURL testing)
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
         if current_app.config.get("DEBUG", False):
-            # In DEBUG mode: Skip JWT - return empty user context
             return func(*args, **kwargs)
         return jwt_required()(func)(*args, **kwargs)
     return wrapper
 
 def require_permission(permission_name):
-    
     def decorator(f):
         @wraps(f)
         @optional_jwt_required  # ← KEY FIX: Use optional_jwt_required
         def decorated_function(*args, **kwargs):
             if current_app.config.get("DEBUG", False):
-            return f(*args, **kwargs)
-            
+                
+                return f(*args, **kwargs)
             user_id = int(get_jwt_identity())
             user = User.query.get(user_id)
 
@@ -38,7 +36,6 @@ def require_permission(permission_name):
             return f(*args, **kwargs)
         return decorated_function
     return decorator
-
 
 @role_bp.route('/roles', methods=['GET'])
 @require_permission('role_read')
