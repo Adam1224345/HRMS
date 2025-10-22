@@ -8,9 +8,6 @@ from functools import wraps
 task_bp = Blueprint('task', __name__)
 
 def optional_jwt_required(func):
-    """
-    Skip JWT check in DEBUG mode (for Swagger/cURL testing)
-    """
     @wraps(func)
     def wrapper(*args, **kwargs):
         if current_app.config.get("DEBUG", False):
@@ -20,21 +17,16 @@ def optional_jwt_required(func):
     return wrapper
 
 def has_permission(user, permission_name):
-    """Check if user has specific permission"""
     return user.has_permission(permission_name)
 
 def has_role(user, role_name):
-    """Check if user has specific role"""
     return any(role.name == role_name for role in user.roles)
 
 def debug_skip_auth(func):
-    """
-    Skip ALL auth checks in DEBUG mode
-    """
     @wraps(func)
     def wrapper(*args, **kwargs):
         if current_app.config.get("DEBUG", False):
-            # In DEBUG mode: Skip ALL auth - act as Admin
+    
             return func(*args, **kwargs)
         return func(*args, **kwargs)
     return wrapper
