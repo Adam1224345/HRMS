@@ -7,10 +7,8 @@ import string
 
 auth_bp = Blueprint('auth', __name__)
 
-# In-memory stores
 blacklisted_tokens = set()
 reset_tokens = {}
-
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
