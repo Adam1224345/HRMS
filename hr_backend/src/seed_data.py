@@ -1,6 +1,3 @@
-"""
-Database seeding script to create initial admin user and sample data
-"""
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -15,13 +12,11 @@ def seed_admin_user():
         print("Admin user already exists")
         return
     
-    # Get admin role
     admin_role = Role.query.filter_by(name='Admin').first()
     if not admin_role:
         print("Admin role not found. Please run the application first to initialize roles.")
         return
     
-    # Create admin user
     admin_user = User(
         username='admin',
         email='admin@hrms.com',
@@ -57,7 +52,6 @@ def seed_sample_users():
         db.session.add(hr_user)
         print("HR Manager user created: hr_manager / hr123")
     
-    # Employee User
     employee_role = Role.query.filter_by(name='Employee').first()
     if employee_role and not User.query.filter_by(username='john_doe').first():
         employee_user = User(
