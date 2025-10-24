@@ -1,139 +1,169 @@
-from flask import Blueprint, jsonify, request, current_app
-from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
-from src.models.user import User, Role, Permission, db
-from functools import wraps
+import os
+import sys
+from datetime import timedelta
 
-role_bp = Blueprint('role', __name__)
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-# -----------------------------
-# JWT Helpers
-# -----------------------------
-def optional_jwt_required(func):
+from flask import Flask, send_from_directory, jsonify, request
+from flask_jwt_extended import JWTManager, create_access_token
+from flask_cors import CORS
+from flasgger import Swagger
+from src.models.user import db, bcrypt
+from src.routes.user import user_bp
+from src.routes.auth import auth_bp, check_if_token_revoked
+from src.routes.role import role_bp
+from src.routes.task import task_bp
+from src.routes.leave import leave_bp
+
+# -------------------- Flask App --------------------
+app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
+app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
+app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
+
+# ✅ Use Neon PostgreSQL
+app.config['SQLALCHEMY_DATABASE_URI'] = (
+    "postgresql://neondb_owner:npg_dP1BrV2uSIbD@"
+    "ep-divine-bird-addhz4kv-pooler.c-2.us-east-1.aws.neon.tech/"
+    "neondb?sslmode=require&channel_binding=require"
+)
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+jwt = JWTManager(app)
+bcrypt.init_app(app)
+CORS(app)
+db.init_app(app)
+jwt.token_in_blocklist_loader(check_if_token_revoked)
+
+# -------------------- Swagger Config --------------------
+app.config['SWAGGER'] = {
+    'title': 'HRMS API Documentation',
+    'uiversion': 3
+}
+
+swagger_template = {
+    "info": {
+        "title": "HRMS API Documentation",
+        "description": "This is the Swagger UI for the Human Resource Management System backend.",
+        "version": "1.0.0",
+        "contact": {
+            "name": "HRMS Dev Team",
+            "email": "support@hrms.com",
+        },
+    },
+    "basePath": "/api",
+    "schemes": ["http", "https"],
+    # ✅ Remove security definitions (no authorize button)
+    "securityDefinitions": {},
+}
+
+swagger = Swagger(app, template=swagger_template)
+
+# -------------------- Register Blueprints --------------------
+app.register_blueprint(auth_bp, url_prefix='/api/auth')
+app.register_blueprint(user_bp, url_prefix='/api')
+app.register_blueprint(role_bp, url_prefix='/api')
+app.register_blueprint(task_bp, url_prefix='/api')
+app.register_blueprint(leave_bp, url_prefix='/api')
+
+# -------------------- Database Init --------------------
+def init_database():
+    """Initialize database with default roles and permissions"""
+    from src.models.user import Role, Permission
+
+    permissions_data = [
+        ('user_read', 'Read user information'),
+        ('user_write', 'Create and update users'),
+        ('user_delete', 'Delete users'),
+        ('role_read', 'Read role information'),
+        ('role_write', 'Create and update roles'),
+        ('role_delete', 'Delete roles'),
+        ('permission_read', 'Read permission information'),
+        ('permission_write', 'Create and update permissions'),
+        ('permission_delete', 'Delete permissions'),
+        ('task_read', 'Read task information'),
+        ('task_write', 'Create and update tasks'),
+        ('task_delete', 'Delete tasks'),
+        ('leave_read', 'Read leave requests'),
+        ('leave_write', 'Create and update leave requests'),
+        ('leave_delete', 'Delete leave requests'),
+        ('leave_approve', 'Approve or reject leave requests'),
+    ]
+
+    for perm_name, perm_desc in permissions_data:
+        if not Permission.query.filter_by(name=perm_name).first():
+            db.session.add(Permission(name=perm_name, description=perm_desc))
+
+    roles_data = [
+        ('Admin', 'System administrator with full access'),
+        ('HR', 'Human resources manager'),
+        ('Employee', 'Regular employee'),
+    ]
+
+    for role_name, role_desc in roles_data:
+        if not Role.query.filter_by(name=role_name).first():
+            db.session.add(Role(name=role_name, description=role_desc))
+
+    db.session.commit()
+
+    # Assign permissions to roles
+    admin_role = Role.query.filter_by(name='Admin').first()
+    hr_role = Role.query.filter_by(name='HR').first()
+    employee_role = Role.query.filter_by(name='Employee').first()
+
+    if admin_role:
+        admin_role.permissions = Permission.query.all()
+    if hr_role:
+        hr_role.permissions = Permission.query.filter(
+            Permission.name.in_([
+                'user_read', 'user_write', 'role_read',
+                'task_read', 'task_write', 'task_delete',
+                'leave_read', 'leave_write', 'leave_approve'
+            ])
+        ).all()
+    if employee_role:
+        employee_role.permissions = Permission.query.filter(
+            Permission.name.in_(['user_read', 'task_read', 'leave_read', 'leave_write'])
+        ).all()
+
+    db.session.commit()
+
+with app.app_context():
+    db.create_all()
+    init_database()
+
+# -------------------- Test Endpoint --------------------
+@app.route('/api/hello', methods=['GET'])
+def hello_world():
     """
-    Allows endpoints to work in Swagger/cURL if DEBUG is True.
-    Otherwise, checks for JWT token.
+    Test Hello Endpoint
+    ---
+    tags:
+      - Test
+    responses:
+      200:
+        description: Returns a simple test message
+        examples:
+          application/json: {"message": "Hello, Swagger is working!"}
     """
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            verify_jwt_in_request()  # will raise if missing/invalid
-        except:
-            if current_app.config.get("DEBUG", False):
-                return func(*args, **kwargs)
-            return jsonify({"msg": "Missing Authorization Header"}), 401
-        return func(*args, **kwargs)
-    return wrapper
+    return jsonify({"message": "Hello, Swagger is working!"})
 
-def require_permission(permission_name):
-    """
-    Checks if user has required permission.
-    Works with optional_jwt_required.
-    """
-    def decorator(f):
-        @wraps(f)
-        @optional_jwt_required
-        def decorated_function(*args, **kwargs):
-            # Skip permission check in DEBUG mode
-            if current_app.config.get("DEBUG", False):
-                return f(*args, **kwargs)
+# -------------------- Serve Static --------------------
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    static_folder_path = app.static_folder
+    if static_folder_path is None:
+        return "Static folder not configured", 404
 
-            user_id = get_jwt_identity()
-            if not user_id:
-                return jsonify({'error': 'Missing JWT identity'}), 401
+    if path != "" and os.path.exists(os.path.join(static_folder_path, path)):
+        return send_from_directory(static_folder_path, path)
+    else:
+        index_path = os.path.join(static_folder_path, 'index.html')
+        if os.path.exists(index_path):
+            return send_from_directory(static_folder_path, 'index.html')
+        else:
+            return "index.html not found", 404
 
-            user = User.query.get(int(user_id))
-            if not user:
-                return jsonify({'error': 'User not found'}), 404
-
-            if not user.has_permission(permission_name):
-                return jsonify({'error': 'Insufficient permissions'}), 403
-
-            return f(*args, **kwargs)
-        return decorated_function
-    return decorator
-
-# -----------------------------
-# Role Routes
-# -----------------------------
-@role_bp.route('/roles', methods=['GET'])
-@require_permission('role_read')
-def get_roles():
-    try:
-        roles = Role.query.all()
-        return jsonify({'roles': [role.to_dict(include_permissions=True) for role in roles]}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@role_bp.route('/roles', methods=['POST'])
-@require_permission('role_write')
-def create_role():
-    try:
-        data = request.get_json()
-        if not data.get('name'):
-            return jsonify({'error': 'Role name is required'}), 400
-        if Role.query.filter_by(name=data['name']).first():
-            return jsonify({'error': 'Role already exists'}), 400
-
-        role = Role(
-            name=data['name'],
-            description=data.get('description', '')
-        )
-        if 'permission_ids' in data:
-            permissions = Permission.query.filter(Permission.id.in_(data['permission_ids'])).all()
-            role.permissions = permissions
-
-        db.session.add(role)
-        db.session.commit()
-        return jsonify({'message': 'Role created successfully', 'role': role.to_dict(include_permissions=True)}), 201
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-@role_bp.route('/roles/<int:role_id>', methods=['GET'])
-@require_permission('role_read')
-def get_role(role_id):
-    try:
-        role = Role.query.get_or_404(role_id)
-        return jsonify({'role': role.to_dict(include_permissions=True)}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@role_bp.route('/roles/<int:role_id>', methods=['PUT'])
-@require_permission('role_write')
-def update_role(role_id):
-    try:
-        role = Role.query.get_or_404(role_id)
-        data = request.get_json()
-
-        if 'name' in data:
-            existing_role = Role.query.filter(Role.name == data['name'], Role.id != role_id).first()
-            if existing_role:
-                return jsonify({'error': 'Role name already exists'}), 400
-            role.name = data['name']
-
-        if 'description' in data:
-            role.description = data['description']
-
-        if 'permission_ids' in data:
-            permissions = Permission.query.filter(Permission.id.in_(data['permission_ids'])).all()
-            role.permissions = permissions
-
-        db.session.commit()
-        return jsonify({'message': 'Role updated successfully', 'role': role.to_dict(include_permissions=True)}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-@role_bp.route('/roles/<int:role_id>', methods=['DELETE'])
-@require_permission('role_delete')
-def delete_role(role_id):
-    try:
-        role = Role.query.get_or_404(role_id)
-        if role.users:
-            return jsonify({'error': f'Cannot delete role. It is assigned to {len(role.users)} user(s)'}), 400
-        db.session.delete(role)
-        db.session.commit()
-        return jsonify({'message': 'Role deleted successfully'}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+# -------------------- Run App --------------------
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
