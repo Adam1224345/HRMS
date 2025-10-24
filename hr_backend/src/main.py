@@ -1,11 +1,7 @@
 import os
 import sys
-from datetime import timedelta
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
-from flask import Flask, send_from_directory, jsonify, request
-from flask_jwt_extended import JWTManager, create_access_token
+from flask import Flask, send_from_directory, jsonify
+from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from flasgger import Swagger
 from src.models.user import db, bcrypt
@@ -15,12 +11,20 @@ from src.routes.role import role_bp
 from src.routes.task import task_bp
 from src.routes.leave import leave_bp
 
-# -------------------- Flask App --------------------
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
+# ----------------------
+# Flask App Initialization
+# ----------------------
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
+
+# Secrets
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
 
-# ✅ Use Neon PostgreSQL
+# ----------------------
+# Database Config (Neon)
+# ----------------------
 app.config['SQLALCHEMY_DATABASE_URI'] = (
     "postgresql://neondb_owner:npg_dP1BrV2uSIbD@"
     "ep-divine-bird-addhz4kv-pooler.c-2.us-east-1.aws.neon.tech/"
@@ -28,46 +32,47 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# ----------------------
+# Extensions
+# ----------------------
 jwt = JWTManager(app)
 bcrypt.init_app(app)
-CORS(app)
 db.init_app(app)
+CORS(app, supports_credentials=True)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
 
-# -------------------- Swagger Config --------------------
-app.config['SWAGGER'] = {
-    'title': 'HRMS API Documentation',
-    'uiversion': 3
-}
+# ----------------------
+# Swagger Config
+# ----------------------
+app.config['SWAGGER'] = {'title': 'HRMS API Documentation', 'uiversion': 3}
 
 swagger_template = {
     "info": {
         "title": "HRMS API Documentation",
         "description": "This is the Swagger UI for the Human Resource Management System backend.",
         "version": "1.0.0",
-        "contact": {
-            "name": "HRMS Dev Team",
-            "email": "support@hrms.com",
-        },
+        "contact": {"name": "HRMS Dev Team", "email": "support@hrms.com"},
     },
     "basePath": "/api",
-    "schemes": ["http", "https"],
-    # ✅ Remove security definitions (no authorize button)
-    "securityDefinitions": {},
+    "schemes": ["https"],  # <-- Force HTTPS for Vercel
 }
 
 swagger = Swagger(app, template=swagger_template)
 
-# -------------------- Register Blueprints --------------------
+# ----------------------
+# Blueprints
+# ----------------------
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(role_bp, url_prefix='/api')
 app.register_blueprint(task_bp, url_prefix='/api')
 app.register_blueprint(leave_bp, url_prefix='/api')
 
-# -------------------- Database Init --------------------
+# ----------------------
+# Database Initialization
+# ----------------------
 def init_database():
-    """Initialize database with default roles and permissions"""
+    """Initialize default roles and permissions."""
     from src.models.user import Role, Permission
 
     permissions_data = [
@@ -105,7 +110,6 @@ def init_database():
 
     db.session.commit()
 
-    # Assign permissions to roles
     admin_role = Role.query.filter_by(name='Admin').first()
     hr_role = Role.query.filter_by(name='HR').first()
     employee_role = Role.query.filter_by(name='Employee').first()
@@ -131,7 +135,9 @@ with app.app_context():
     db.create_all()
     init_database()
 
-# -------------------- Test Endpoint --------------------
+# ----------------------
+# Test Endpoint
+# ----------------------
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
     """
@@ -147,7 +153,9 @@ def hello_world():
     """
     return jsonify({"message": "Hello, Swagger is working!"})
 
-# -------------------- Serve Static --------------------
+# ----------------------
+# Serve Frontend
+# ----------------------
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
@@ -164,6 +172,9 @@ def serve(path):
         else:
             return "index.html not found", 404
 
-# -------------------- Run App --------------------
+# ----------------------
+# Main Entry
+# ----------------------
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Use 0.0.0.0 on Vercel / Docker deployment
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=True)
