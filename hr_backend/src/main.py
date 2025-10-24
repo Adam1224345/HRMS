@@ -23,11 +23,14 @@ app = Flask(
 )
 
 # ----------------------------
-# Hardcoded configs
+# Hardcoded configuration
 # ----------------------------
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://neondb_owner:npg_dP1BrV2uSIbD@ep-divine-bird-addhz4kv-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require'
+app.config['SQLALCHEMY_DATABASE_URI'] = (
+    'postgresql://neondb_owner:npg_dP1BrV2uSIbD@'
+    'ep-divine-bird-addhz4kv-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require'
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # ----------------------------
@@ -36,6 +39,8 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 jwt = JWTManager(app)
 bcrypt.init_app(app)
 db.init_app(app)
+
+# Fix CORS for serverless environment
 CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
 
@@ -45,11 +50,11 @@ jwt.token_in_blocklist_loader(check_if_token_revoked)
 swagger_template = {
     "info": {
         "title": "HRMS API Documentation",
-        "description": "This is the Swagger UI for the Human Resource Management System backend.",
+        "description": "Swagger UI for HRMS backend",
         "version": "1.0.0",
         "contact": {"name": "HRMS Dev Team", "email": "support@hrms.com"},
     },
-    "schemes": ["https"],
+    "schemes": ["https"],  # force HTTPS on Vercel
     "basePath": "/api"
 }
 
@@ -65,7 +70,7 @@ app.register_blueprint(task_bp, url_prefix='/api')
 app.register_blueprint(leave_bp, url_prefix='/api')
 
 # ----------------------------
-# Database init - only locally
+# Database initialization (only local, not on Vercel)
 # ----------------------------
 def init_database():
     from src.models.user import Role, Permission
@@ -126,7 +131,7 @@ def init_database():
 
     db.session.commit()
 
-# Only initialize DB locally (prevents Vercel crashes)
+# Only run DB init locally (prevents Vercel crashes)
 if os.environ.get("FLASK_ENV") == "development":
     with app.app_context():
         db.create_all()
