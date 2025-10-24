@@ -40,12 +40,14 @@ jwt = JWTManager(app)
 bcrypt.init_app(app)
 db.init_app(app)
 
-# Fix CORS for serverless environment
+# ----------------------------
+# Enable CORS for all /api/* routes
+# ----------------------------
 CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
 
 # ----------------------------
-# Swagger setup
+# Swagger setup (HTTPS for Vercel)
 # ----------------------------
 swagger_template = {
     "info": {
@@ -54,7 +56,7 @@ swagger_template = {
         "version": "1.0.0",
         "contact": {"name": "HRMS Dev Team", "email": "support@hrms.com"},
     },
-    "schemes": ["https"],  # force HTTPS on Vercel
+    "schemes": ["https"],  # Force HTTPS on Vercel
     "basePath": "/api"
 }
 
@@ -70,7 +72,7 @@ app.register_blueprint(task_bp, url_prefix='/api')
 app.register_blueprint(leave_bp, url_prefix='/api')
 
 # ----------------------------
-# Database initialization (only local, not on Vercel)
+# Database initialization (local only)
 # ----------------------------
 def init_database():
     from src.models.user import Role, Permission
@@ -131,7 +133,7 @@ def init_database():
 
     db.session.commit()
 
-# Only run DB init locally (prevents Vercel crashes)
+# Only run DB init locally to prevent serverless crashes
 if os.environ.get("FLASK_ENV") == "development":
     with app.app_context():
         db.create_all()
