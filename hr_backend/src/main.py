@@ -13,47 +13,66 @@ from src.routes.role import role_bp
 from src.routes.task import task_bp
 from src.routes.leave import leave_bp
 
-app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
+# ----------------------------
+# Flask app setup
+# ----------------------------
+app = Flask(
+    __name__,
+    static_folder=os.path.join(os.path.dirname(__file__), 'static'),
+    static_url_path='/static'
+)
+
+# ----------------------------
+# Hardcoded configuration
+# ----------------------------
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
+app.config['SQLALCHEMY_DATABASE_URI'] = (
+    'postgresql://neondb_owner:npg_dP1BrV2uSIbD@'
+    'ep-divine-bird-addhz4kv-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require'
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# ----------------------------
+# Extensions
+# ----------------------------
 jwt = JWTManager(app)
 bcrypt.init_app(app)
-CORS(app)
 db.init_app(app)
+
+# Fix CORS for serverless environment
+CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
 
-app.config['SWAGGER'] = {
-    'title': 'HRMS API Documentation',
-    'uiversion': 3
-}
-
+# ----------------------------
+# Swagger setup
+# ----------------------------
 swagger_template = {
     "info": {
         "title": "HRMS API Documentation",
-        "description": "This is the Swagger UI for the Human Resource Management System backend.",
+        "description": "Swagger UI for HRMS backend",
         "version": "1.0.0",
-        "contact": {
-            "name": "HRMS Dev Team",
-            "email": "support@hrms.com",
-        },
+        "contact": {"name": "HRMS Dev Team", "email": "support@hrms.com"},
     },
-    "basePath": "/api",
-    "schemes": ["http", "https"],
+    "schemes": ["https"],  # force HTTPS on Vercel
+    "basePath": "/api"
 }
 
-swagger = Swagger(app, template=swagger_template)
+swagger = Swagger(app, template=swagger_template, config={"specs_route": "/api/docs/"})
 
+# ----------------------------
+# Register blueprints
+# ----------------------------
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(role_bp, url_prefix='/api')
 app.register_blueprint(task_bp, url_prefix='/api')
 app.register_blueprint(leave_bp, url_prefix='/api')
 
+# ----------------------------
+# Database initialization (only local, not on Vercel)
+# ----------------------------
 def init_database():
-    """Initialize database with default roles and permissions"""
     from src.models.user import Role, Permission
 
     permissions_data = [
@@ -112,25 +131,24 @@ def init_database():
 
     db.session.commit()
 
-with app.app_context():
-    db.create_all()
-    init_database()
+# Only run DB init locally (prevents Vercel crashes)
+if os.environ.get("FLASK_ENV") == "development":
+    with app.app_context():
+        db.create_all()
+        init_database()
 
+# ----------------------------
+# Test endpoint
+# ----------------------------
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
-    """
-    Test Hello Endpoint
-    ---
-    tags:
-      - Test
-    responses:
-      200:
-        description: Returns a simple test message
-        examples:
-          application/json: {"message": "Hello, Swagger is working!"}
-    """
-    return jsonify({"message": "Hello, Swagger is working!"})
+    from src.models.user import Role
+    role_count = Role.query.count()
+    return jsonify({"message": f"Hello, Swagger is working! Found {role_count} roles in the database."})
 
+# ----------------------------
+# Serve frontend
+# ----------------------------
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
@@ -147,5 +165,8 @@ def serve(path):
         else:
             return "index.html not found", 404
 
+# ----------------------------
+# Local run only
+# ----------------------------
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
