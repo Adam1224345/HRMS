@@ -2,7 +2,7 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from flask import Flask, send_from_directory, jsonify, Response
+from flask import Flask, send_from_directory, jsonify
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from flasgger import Swagger
@@ -18,28 +18,16 @@ app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JWT_TOKEN_LOCATION'] = ['headers']  # Ensure JWT in headers only
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 86400  # 24-hour token expiry (matches auth.py)
-app.config['PROPAGATE_EXCEPTIONS'] = True  # Log errors in Vercel
-app.config['DEBUG'] = False  # Explicitly disable DEBUG on Vercel
 
 jwt = JWTManager(app)
 bcrypt.init_app(app)
-CORS(app, resources={r"/api/*": {"origins": ["*"], "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"], "allow_headers": ["Content-Type", "Authorization"]}})  # Enhanced CORS
+CORS(app)
 db.init_app(app)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
 
 app.config['SWAGGER'] = {
     'title': 'HRMS API Documentation',
-    'uiversion': 3,
-    'securityDefinitions': {
-        'BearerAuth': {
-            'type': 'apiKey',
-            'name': 'Authorization',
-            'in': 'header',
-            'description': 'Enter: Bearer <JWT_TOKEN>'
-        }
-    }
+    'uiversion': 3
 }
 
 swagger_template = {
@@ -53,8 +41,7 @@ swagger_template = {
         },
     },
     "basePath": "/api",
-    "schemes": ["https"],  # Force HTTPS for Vercel
-    "security": [{"BearerAuth": []}]  # Require JWT for protected endpoints
+    "schemes": ["http", "https"],
 }
 
 swagger = Swagger(app, template=swagger_template)
@@ -66,8 +53,8 @@ app.register_blueprint(task_bp, url_prefix='/api')
 app.register_blueprint(leave_bp, url_prefix='/api')
 
 def init_database():
-    """Initialize database with default roles, permissions, and admin user"""
-    from src.models.user import Role, Permission, User
+    """Initialize database with default roles and permissions"""
+    from src.models.user import Role, Permission
 
     permissions_data = [
         ('user_read', 'Read user information'),
@@ -102,11 +89,7 @@ def init_database():
         if not Role.query.filter_by(name=role_name).first():
             db.session.add(Role(name=role_name, description=role_desc))
 
-    try:
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        print(f"Failed to create roles/permissions: {str(e)}")  # Log for Vercel
+    db.session.commit()
 
     admin_role = Role.query.filter_by(name='Admin').first()
     hr_role = Role.query.filter_by(name='HR').first()
@@ -127,31 +110,11 @@ def init_database():
             Permission.name.in_(['user_read', 'task_read', 'leave_read', 'leave_write'])
         ).all()
 
-    # Create default admin user for login
-    if not User.query.filter_by(email='admin@hrms.com').first():
-        admin_user = User(
-            email='admin@hrms.com',
-            username='admin',
-            password=bcrypt.generate_password_hash('admin123').decode('utf-8'),
-            first_name='Admin',
-            last_name='User',
-        )
-        if admin_role:
-            admin_user.roles.append(admin_role)
-        db.session.add(admin_user)
-
-    try:
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        print(f"Failed to create admin user: {str(e)}")  # Log for Vercel
+    db.session.commit()
 
 with app.app_context():
-    try:
-        db.create_all()
-        init_database()
-    except Exception as e:
-        print(f"Failed to initialize database: {str(e)}")  # Log for Vercel
+    db.create_all()
+    init_database()
 
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
@@ -168,67 +131,12 @@ def hello_world():
     """
     return jsonify({"message": "Hello, Swagger is working!"})
 
-@app.route('/api/apidocs', methods=['GET'])
-def apidocs():
-    """Serve Swagger UI"""
-    html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>HRMS API Documentation</title>
-      <meta charset="utf-8"/>
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css" />
-      <style>
-        body { margin: 0; }
-      </style>
-    </head>
-    <body>
-      <div id="swagger-ui"></div>
-      <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-      <script>
-        window.onload = function() {
-          const ui = SwaggerUIBundle({
-            url: '/api/swagger.json',
-            dom_id: '#swagger-ui',
-            presets: [
-              SwaggerUIBundle.presets.apis,
-            ],
-            deepLinking: true,
-            defaultModelsExpandDepth: 1,
-            defaultModelExpandDepth: 1,
-            oauth2RedirectUrl: window.location.origin + '/api/apidocs/oauth2-redirect.html'
-          });
-          window.ui = ui;
-        };
-      </script>
-    </body>
-    </html>
-    """
-    return Response(html, mimetype='text/html')
-
-@app.route('/api/swagger.json', methods=['GET', 'OPTIONS'])
-def swagger_json():
-    """Serve Swagger JSON spec"""
-    if request.method == 'OPTIONS':
-        response = Response('', status=200)
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        return response
-    try:
-        from flasgger import utils
-        spec = utils.get_spec(swagger.app)
-        return jsonify(spec)
-    except Exception as e:
-        return jsonify({'error': f'Failed to generate Swagger spec: {str(e)}'}), 500
-
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
     static_folder_path = app.static_folder
     if static_folder_path is None:
-        return jsonify({'error': 'Static folder not configured'}), 404
+        return "Static folder not configured", 404
 
     if path != "" and os.path.exists(os.path.join(static_folder_path, path)):
         return send_from_directory(static_folder_path, path)
@@ -237,4 +145,7 @@ def serve(path):
         if os.path.exists(index_path):
             return send_from_directory(static_folder_path, 'index.html')
         else:
-            return jsonify({'error': 'index.html not found'}), 404
+            return "index.html not found", 404
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
