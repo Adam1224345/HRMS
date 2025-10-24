@@ -13,28 +13,18 @@ from src.routes.role import role_bp
 from src.routes.task import task_bp
 from src.routes.leave import leave_bp
 
-# ------------------ APP CONFIG ------------------
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
-
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
-
-# ✅ Use Neon PostgreSQL (no .env needed)
-app.config['SQLALCHEMY_DATABASE_URI'] = (
-    "postgresql://neondb_owner:npg_dP1BrV2uSIbD@"
-    "ep-divine-bird-addhz4kv-pooler.c-2.us-east-1.aws.neon.tech/"
-    "neondb?sslmode=require&channel_binding=require"
-)
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# ------------------ INITIALIZATIONS ------------------
 jwt = JWTManager(app)
 bcrypt.init_app(app)
 CORS(app)
 db.init_app(app)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
 
-# ------------------ SWAGGER CONFIG ------------------
 app.config['SWAGGER'] = {
     'title': 'HRMS API Documentation',
     'uiversion': 3
@@ -51,29 +41,17 @@ swagger_template = {
         },
     },
     "basePath": "/api",
-    # ✅ HTTPS-only (fixes missing Authorization header issue)
-    "schemes": ["https"],
-    "securityDefinitions": {
-        "Bearer": {
-            "type": "apiKey",
-            "name": "Authorization",
-            "in": "header",
-            "description": "JWT Authorization header using the Bearer scheme. Example: 'Bearer {token}'"
-        }
-    },
-    "security": [{"Bearer": []}]
+    "schemes": ["http", "https"],
 }
 
 swagger = Swagger(app, template=swagger_template)
 
-# ------------------ BLUEPRINTS ------------------
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(role_bp, url_prefix='/api')
 app.register_blueprint(task_bp, url_prefix='/api')
 app.register_blueprint(leave_bp, url_prefix='/api')
 
-# ------------------ DATABASE INIT ------------------
 def init_database():
     """Initialize database with default roles and permissions"""
     from src.models.user import Role, Permission
@@ -138,7 +116,6 @@ with app.app_context():
     db.create_all()
     init_database()
 
-# ------------------ ROUTES ------------------
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
     """
@@ -153,7 +130,6 @@ def hello_world():
           application/json: {"message": "Hello, Swagger is working!"}
     """
     return jsonify({"message": "Hello, Swagger is working!"})
-
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -171,8 +147,5 @@ def serve(path):
         else:
             return "index.html not found", 404
 
-
-# ------------------ MAIN ------------------
 if __name__ == '__main__':
-    # Run with HTTPS mode for local dev testing
     app.run(host='0.0.0.0', port=5000, debug=True)
