@@ -14,9 +14,10 @@ from src.routes.task import task_bp
 from src.routes.leave import leave_bp
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
+
+# ---------------- Config ----------------
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
-
 app.config['SQLALCHEMY_DATABASE_URI'] = (
     "postgresql://neondb_owner:npg_dP1BrV2uSIbD@"
     "ep-divine-bird-addhz4kv-pooler.c-2.us-east-1.aws.neon.tech/"
@@ -24,11 +25,15 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# ---------------- Extensions ----------------
 jwt = JWTManager(app)
 bcrypt.init_app(app)
-CORS(app, origins="*", supports_credentials=True)  # allow all origins for Vercel
+# ✅ CORS: allow all origins + credentials for Swagger
+CORS(app, origins="*", supports_credentials=True)
 db.init_app(app)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
+
+# ---------------- Swagger ----------------
 swagger_template = {
     "info": {
         "title": "HRMS API Documentation",
@@ -36,7 +41,7 @@ swagger_template = {
         "version": "1.0.0",
         "contact": {"name": "HRMS Dev Team", "email": "support@hrms.com"},
     },
-    "schemes": ["https"],
+    "schemes": ["https"],  # force https for Vercel
     "securityDefinitions": {
         "Bearer": {
             "type": "apiKey",
@@ -47,12 +52,15 @@ swagger_template = {
     },
 }
 swagger = Swagger(app, template=swagger_template)
+
+# ---------------- Blueprints ----------------
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(role_bp, url_prefix='/api')
 app.register_blueprint(task_bp, url_prefix='/api')
 app.register_blueprint(leave_bp, url_prefix='/api')
 
+# ---------------- Init Database ----------------
 def init_database():
     from src.models.user import Role, Permission
 
@@ -115,6 +123,8 @@ def init_database():
 with app.app_context():
     db.create_all()
     init_database()
+
+# ---------------- Test Endpoint ----------------
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
     """
@@ -129,6 +139,8 @@ def hello_world():
           application/json: {"message": "Hello, Swagger is working!"}
     """
     return jsonify({"message": "Hello, Swagger is working!"})
+
+# ---------------- Serve Frontend ----------------
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
@@ -145,5 +157,6 @@ def serve(path):
         else:
             return "index.html not found", 404
 
+# ---------------- Run ----------------
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=True)
