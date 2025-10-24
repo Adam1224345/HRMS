@@ -16,8 +16,11 @@ from src.routes.leave import leave_bp
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 
 # ---------------- Config ----------------
+# Hardcoded secrets (works without .env)
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
+
+# Neon PostgreSQL database (full read/write)
 app.config['SQLALCHEMY_DATABASE_URI'] = (
     "postgresql://neondb_owner:npg_dP1BrV2uSIbD@"
     "ep-divine-bird-addhz4kv-pooler.c-2.us-east-1.aws.neon.tech/"
@@ -28,8 +31,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # ---------------- Extensions ----------------
 jwt = JWTManager(app)
 bcrypt.init_app(app)
-# ✅ CORS: allow all origins + credentials for Swagger
-CORS(app, origins="*", supports_credentials=True)
+CORS(app, origins="*", supports_credentials=True)  # allow all origins for Vercel
 db.init_app(app)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
 
@@ -41,7 +43,7 @@ swagger_template = {
         "version": "1.0.0",
         "contact": {"name": "HRMS Dev Team", "email": "support@hrms.com"},
     },
-    "schemes": ["https"],  # force https for Vercel
+    "schemes": ["https"],
     "securityDefinitions": {
         "Bearer": {
             "type": "apiKey",
