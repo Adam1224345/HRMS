@@ -14,14 +14,23 @@ from src.routes.task import task_bp
 from src.routes.leave import leave_bp
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
-app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
-app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'asdf#FGSgvasgf$5$WGT')
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'jwt-secret-string-change-in-production')
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['DEBUG'] = False  # Disable debug mode in production
 
 jwt = JWTManager(app)
 bcrypt.init_app(app)
-CORS(app)
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["https://your-vercel-app.vercel.app", "http://localhost:5000"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Authorization", "Content-Type", "X-Requested-With"],
+        "expose_headers": ["Authorization"],
+        "supports_credentials": True
+    }
+})
 db.init_app(app)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
 
@@ -41,7 +50,20 @@ swagger_template = {
         },
     },
     "basePath": "/api",
-    "schemes": ["http", "https"],
+    "schemes": ["https"],
+    "securityDefinitions": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "description": "Enter JWT token in format: 'Bearer <token>'"
+        }
+    },
+    "security": [
+        {
+            "Bearer": []
+        }
+    ]
 }
 
 swagger = Swagger(app, template=swagger_template)
@@ -54,7 +76,7 @@ app.register_blueprint(leave_bp, url_prefix='/api')
 
 def init_database():
     """Initialize database with default roles and permissions"""
-    from src.models.user import Role, Permission
+    from src.models.user import Role, Permission, BlacklistedToken
 
     permissions_data = [
         ('user_read', 'Read user information'),
