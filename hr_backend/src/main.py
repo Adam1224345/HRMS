@@ -1,419 +1,151 @@
-from flask import Blueprint, jsonify, request
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, get_jwt
-from src.models.user import User, Role, db
-from datetime import timedelta
-import secrets
-import string
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-auth_bp = Blueprint('auth', __name__)
+from flask import Flask, send_from_directory, jsonify
+from flask_jwt_extended import JWTManager
+from flask_cors import CORS
+from flasgger import Swagger
+from src.models.user import db, bcrypt
+from src.routes.user import user_bp
+from src.routes.auth import auth_bp, check_if_token_revoked
+from src.routes.role import role_bp
+from src.routes.task import task_bp
+from src.routes.leave import leave_bp
 
-blacklisted_tokens = set()
-reset_tokens = {}
+app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
+app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
+app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-@auth_bp.route('/register', methods=['POST'])
-def register():
+jwt = JWTManager(app)
+bcrypt.init_app(app)
+CORS(app)
+db.init_app(app)
+jwt.token_in_blocklist_loader(check_if_token_revoked)
+
+app.config['SWAGGER'] = {
+    'title': 'HRMS API Documentation',
+    'uiversion': 3
+}
+
+swagger_template = {
+    "info": {
+        "title": "HRMS API Documentation",
+        "description": "This is the Swagger UI for the Human Resource Management System backend.",
+        "version": "1.0.0",
+        "contact": {
+            "name": "HRMS Dev Team",
+            "email": "support@hrms.com",
+        },
+    },
+    "basePath": "/api",
+    "schemes": ["http", "https"],
+}
+
+swagger = Swagger(app, template=swagger_template)
+
+app.register_blueprint(auth_bp, url_prefix='/api/auth')
+app.register_blueprint(user_bp, url_prefix='/api')
+app.register_blueprint(role_bp, url_prefix='/api')
+app.register_blueprint(task_bp, url_prefix='/api')
+app.register_blueprint(leave_bp, url_prefix='/api')
+
+def init_database():
+    """Initialize database with default roles and permissions"""
+    from src.models.user import Role, Permission
+
+    permissions_data = [
+        ('user_read', 'Read user information'),
+        ('user_write', 'Create and update users'),
+        ('user_delete', 'Delete users'),
+        ('role_read', 'Read role information'),
+        ('role_write', 'Create and update roles'),
+        ('role_delete', 'Delete roles'),
+        ('permission_read', 'Read permission information'),
+        ('permission_write', 'Create and update permissions'),
+        ('permission_delete', 'Delete permissions'),
+        ('task_read', 'Read task information'),
+        ('task_write', 'Create and update tasks'),
+        ('task_delete', 'Delete tasks'),
+        ('leave_read', 'Read leave requests'),
+        ('leave_write', 'Create and update leave requests'),
+        ('leave_delete', 'Delete leave requests'),
+        ('leave_approve', 'Approve or reject leave requests'),
+    ]
+
+    for perm_name, perm_desc in permissions_data:
+        if not Permission.query.filter_by(name=perm_name).first():
+            db.session.add(Permission(name=perm_name, description=perm_desc))
+
+    roles_data = [
+        ('Admin', 'System administrator with full access'),
+        ('HR', 'Human resources manager'),
+        ('Employee', 'Regular employee'),
+    ]
+
+    for role_name, role_desc in roles_data:
+        if not Role.query.filter_by(name=role_name).first():
+            db.session.add(Role(name=role_name, description=role_desc))
+
+    db.session.commit()
+
+    admin_role = Role.query.filter_by(name='Admin').first()
+    hr_role = Role.query.filter_by(name='HR').first()
+    employee_role = Role.query.filter_by(name='Employee').first()
+
+    if admin_role:
+        admin_role.permissions = Permission.query.all()
+    if hr_role:
+        hr_role.permissions = Permission.query.filter(
+            Permission.name.in_([
+                'user_read', 'user_write', 'role_read',
+                'task_read', 'task_write', 'task_delete',
+                'leave_read', 'leave_write', 'leave_approve'
+            ])
+        ).all()
+    if employee_role:
+        employee_role.permissions = Permission.query.filter(
+            Permission.name.in_(['user_read', 'task_read', 'leave_read', 'leave_write'])
+        ).all()
+
+    db.session.commit()
+
+with app.app_context():
+    db.create_all()
+    init_database()
+
+@app.route('/api/hello', methods=['GET'])
+def hello_world():
     """
-    Register a new user
+    Test Hello Endpoint
     ---
     tags:
-      - Authentication
-    description: Create a new user account with username, email, and password.
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          required:
-            - username
-            - email
-            - password
-          properties:
-            username:
-              type: string
-              example: johndoe
-            email:
-              type: string
-              example: johndoe@example.com
-            password:
-              type: string
-              example: strongpassword123
-            first_name:
-              type: string
-              example: John
-            last_name:
-              type: string
-              example: Doe
-    responses:
-      201:
-        description: User registered successfully
-      400:
-        description: Missing or invalid data
-      500:
-        description: Server error
-    """
-    try:
-        data = request.get_json()
-        required_fields = ['username', 'email', 'password']
-        for field in required_fields:
-            if not data.get(field):
-                return jsonify({'error': f'{field} is required'}), 400
-
-        if User.query.filter_by(username=data['username']).first():
-            return jsonify({'error': 'Username already exists'}), 400
-        if User.query.filter_by(email=data['email']).first():
-            return jsonify({'error': 'Email already exists'}), 400
-
-        user = User(
-            username=data['username'],
-            email=data['email'],
-            first_name=data.get('first_name', ''),
-            last_name=data.get('last_name', '')
-        )
-        user.set_password(data['password'])
-
-        default_role = Role.query.filter_by(name='Employee').first()
-        if default_role:
-            user.roles.append(default_role)
-
-        db.session.add(user)
-        db.session.commit()
-
-        return jsonify({
-            'message': 'User registered successfully',
-            'user': user.to_dict(include_roles=True)
-        }), 201
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-
-@auth_bp.route('/login', methods=['POST'])
-def login():
-    """
-    Authenticate user and return JWT token
-    ---
-    tags:
-      - Authentication
-    description: Login with username or email and password to get a JWT token.
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          required:
-            - username
-            - password
-          properties:
-            username:
-              type: string
-              example: johndoe
-            password:
-              type: string
-              example: strongpassword123
-    responses:
-      200:
-        description: Login successful
-      400:
-        description: Missing credentials
-      401:
-        description: Invalid credentials
-      500:
-        description: Server error
-    """
-    try:
-        data = request.get_json()
-        if not data.get('username') or not data.get('password'):
-            return jsonify({'error': 'Username and password are required'}), 400
-
-        user = User.query.filter(
-            (User.username == data['username']) | (User.email == data['username'])
-        ).first()
-
-        if not user or not user.check_password(data['password']):
-            return jsonify({'error': 'Invalid credentials'}), 401
-        if not user.is_active:
-            return jsonify({'error': 'Account is deactivated'}), 401
-
-        access_token = create_access_token(identity=str(user.id), expires_delta=timedelta(hours=24))
-        return jsonify({
-            'message': 'Login successful',
-            'access_token': access_token,
-            'user': user.to_dict(include_roles=True)
-        }), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@auth_bp.route('/logout', methods=['POST'])
-@jwt_required()
-def logout():
-    """
-    Logout user by blacklisting the JWT token
-    ---
-    tags:
-      - Authentication
-    security:
-      - Bearer: []
+      - Test
     responses:
       200:
-        description: Successfully logged out
-      500:
-        description: Server error
+        description: Returns a simple test message
+        examples:
+          application/json: {"message": "Hello, Swagger is working!"}
     """
-    try:
-        jti = get_jwt()['jti']
-        blacklisted_tokens.add(jti)
-        return jsonify({'message': 'Successfully logged out'}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    return jsonify({"message": "Hello, Swagger is working!"})
 
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    static_folder_path = app.static_folder
+    if static_folder_path is None:
+        return "Static folder not configured", 404
 
-@auth_bp.route('/profile', methods=['GET'])
-@jwt_required()
-def get_profile():
-    """
-    Get current user's profile
-    ---
-    tags:
-      - Authentication
-    security:
-      - Bearer: []
-    responses:
-      200:
-        description: User profile returned successfully
-      404:
-        description: User not found
-      500:
-        description: Server error
-    """
-    try:
-        user_id = int(get_jwt_identity())
-        user = User.query.get(user_id)
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
-        return jsonify({'user': user.to_dict(include_roles=True)}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    if path != "" and os.path.exists(os.path.join(static_folder_path, path)):
+        return send_from_directory(static_folder_path, path)
+    else:
+        index_path = os.path.join(static_folder_path, 'index.html')
+        if os.path.exists(index_path):
+            return send_from_directory(static_folder_path, 'index.html')
+        else:
+            return "index.html not found", 404
 
-
-@auth_bp.route('/profile', methods=['PUT'])
-@jwt_required()
-def update_profile():
-    """
-    Update current user's profile
-    ---
-    tags:
-      - Authentication
-    security:
-      - Bearer: []
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          properties:
-            first_name:
-              type: string
-              example: John
-            last_name:
-              type: string
-              example: Doe
-            email:
-              type: string
-              example: john.doe@example.com
-    responses:
-      200:
-        description: Profile updated successfully
-      400:
-        description: Email already exists
-      404:
-        description: User not found
-      500:
-        description: Server error
-    """
-    try:
-        user_id = int(get_jwt_identity())
-        user = User.query.get(user_id)
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
-
-        data = request.get_json()
-        if 'first_name' in data:
-            user.first_name = data['first_name']
-        if 'last_name' in data:
-            user.last_name = data['last_name']
-        if 'email' in data:
-            existing_user = User.query.filter(User.email == data['email'], User.id != user_id).first()
-            if existing_user:
-                return jsonify({'error': 'Email already exists'}), 400
-            user.email = data['email']
-
-        db.session.commit()
-        return jsonify({'message': 'Profile updated successfully', 'user': user.to_dict(include_roles=True)}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-
-@auth_bp.route('/change-password', methods=['POST'])
-@jwt_required()
-def change_password():
-    """
-    Change user's password
-    ---
-    tags:
-      - Authentication
-    security:
-      - Bearer: []
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          required:
-            - current_password
-            - new_password
-          properties:
-            current_password:
-              type: string
-              example: oldpassword123
-            new_password:
-              type: string
-              example: newStrongPassword123
-    responses:
-      200:
-        description: Password changed successfully
-      400:
-        description: Invalid current password
-      404:
-        description: User not found
-      500:
-        description: Server error
-    """
-    try:
-        user_id = int(get_jwt_identity())
-        user = User.query.get(user_id)
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
-
-        data = request.get_json()
-        if not data.get('current_password') or not data.get('new_password'):
-            return jsonify({'error': 'Current password and new password are required'}), 400
-
-        if not user.check_password(data['current_password']):
-            return jsonify({'error': 'Current password is incorrect'}), 400
-
-        user.set_password(data['new_password'])
-        db.session.commit()
-        return jsonify({'message': 'Password changed successfully'}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-
-@auth_bp.route('/forgot-password', methods=['POST'])
-def forgot_password():
-    """
-    Generate password reset token
-    ---
-    tags:
-      - Authentication
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          required:
-            - email
-          properties:
-            email:
-              type: string
-              example: johndoe@example.com
-    responses:
-      200:
-        description: Reset token generated
-      400:
-        description: Missing email
-      500:
-        description: Server error
-    """
-    try:
-        data = request.get_json()
-        if not data.get('email'):
-            return jsonify({'error': 'Email is required'}), 400
-
-        user = User.query.filter_by(email=data['email']).first()
-        if not user:
-            return jsonify({'message': 'If the email exists, a reset token has been generated'}), 200
-
-        token = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
-        reset_tokens[token] = user.id
-        return jsonify({'message': 'Password reset token generated', 'reset_token': token}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@auth_bp.route('/reset-password', methods=['POST'])
-def reset_password():
-    """
-    Reset password using token
-    ---
-    tags:
-      - Authentication
-    parameters:
-      - name: body
-        in: body
-        required: true
-        schema:
-          type: object
-          required:
-            - token
-            - new_password
-          properties:
-            token:
-              type: string
-              example: ABC123XYZ456
-            new_password:
-              type: string
-              example: newPassword789
-    responses:
-      200:
-        description: Password reset successfully
-      400:
-        description: Invalid or expired token
-      404:
-        description: User not found
-      500:
-        description: Server error
-    """
-    try:
-        data = request.get_json()
-        if not data.get('token') or not data.get('new_password'):
-            return jsonify({'error': 'Token and new password are required'}), 400
-
-        user_id = reset_tokens.get(data['token'])
-        if not user_id:
-            return jsonify({'error': 'Invalid or expired token'}), 400
-
-        user = User.query.get(user_id)
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
-
-        user.set_password(data['new_password'])
-        db.session.commit()
-        del reset_tokens[data['token']]
-
-        return jsonify({'message': 'Password reset successfully'}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-def check_if_token_revoked(jwt_header, jwt_payload):
-    """Check if JWT token is blacklisted"""
-    jti = jwt_payload['jti']
-    return jti in blacklisted_tokens
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
