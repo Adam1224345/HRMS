@@ -1,5 +1,5 @@
 import os
-from flask import Flask, send_from_directory, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from flasgger import Swagger
@@ -41,7 +41,7 @@ db.init_app(app)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
 
 # ----------------------------
-# Enable CORS for all /api/* routes
+# Enable CORS
 # ----------------------------
 CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
@@ -55,7 +55,7 @@ swagger_template = {
         "version": "1.0.0",
         "contact": {"name": "HRMS Dev Team", "email": "support@hrms.com"},
     },
-    "schemes": ["https"],  # Force HTTPS
+    "schemes": ["https"],
     "basePath": "/api"
 }
 Swagger(app, template=swagger_template, config={"specs_route": "/api/docs/"})
@@ -74,12 +74,7 @@ app.register_blueprint(leave_bp, url_prefix='/api')
 # ----------------------------
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
-    from src.models.user import Role
-    try:
-        role_count = Role.query.count()
-    except Exception:
-        role_count = "Database not initialized"
-    return jsonify({"message": f"Hello, Swagger is working! Roles: {role_count}"})
+    return jsonify({"message": "Hello, Swagger is working! DB not initialized on serverless."})
 
 # ----------------------------
 # Serve frontend
