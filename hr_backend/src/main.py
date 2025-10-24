@@ -19,12 +19,13 @@ app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_TOKEN_LOCATION'] = ['headers']  # Ensure JWT in headers only
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 3600  # 1-hour token expiry
-app.config['PROPAGATE_EXCEPTIONS'] = True  # Ensure errors are visible in Vercel logs
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 86400  # 24-hour token expiry (matches auth.py)
+app.config['PROPAGATE_EXCEPTIONS'] = True  # Log errors in Vercel
+app.config['DEBUG'] = False  # Explicitly disable DEBUG on Vercel
 
 jwt = JWTManager(app)
 bcrypt.init_app(app)
-CORS(app, resources={r"/api/*": {"origins": ["*"], "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]}})  # Enhanced CORS
+CORS(app, resources={r"/api/*": {"origins": ["*"], "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"], "allow_headers": ["Content-Type", "Authorization"]}})  # Enhanced CORS
 db.init_app(app)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
 
@@ -101,7 +102,11 @@ def init_database():
         if not Role.query.filter_by(name=role_name).first():
             db.session.add(Role(name=role_name, description=role_desc))
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Failed to create roles/permissions: {str(e)}")  # Log for Vercel
 
     admin_role = Role.query.filter_by(name='Admin').first()
     hr_role = Role.query.filter_by(name='HR').first()
@@ -126,25 +131,27 @@ def init_database():
     if not User.query.filter_by(email='admin@hrms.com').first():
         admin_user = User(
             email='admin@hrms.com',
+            username='admin',
             password=bcrypt.generate_password_hash('admin123').decode('utf-8'),
             first_name='Admin',
             last_name='User',
-            role_id=admin_role.id if admin_role else None
         )
+        if admin_role:
+            admin_user.roles.append(admin_role)
         db.session.add(admin_user)
 
     try:
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        print(f"Database initialization failed: {str(e)}")  # Log error for Vercel
+        print(f"Failed to create admin user: {str(e)}")  # Log for Vercel
 
 with app.app_context():
     try:
         db.create_all()
         init_database()
     except Exception as e:
-        print(f"Failed to initialize database: {str(e)}")  # Log error for Vercel
+        print(f"Failed to initialize database: {str(e)}")  # Log for Vercel
 
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
@@ -189,7 +196,8 @@ def apidocs():
             ],
             deepLinking: true,
             defaultModelsExpandDepth: 1,
-            defaultModelExpandDepth: 1
+            defaultModelExpandDepth: 1,
+            oauth2RedirectUrl: window.location.origin + '/api/apidocs/oauth2-redirect.html'
           });
           window.ui = ui;
         };
