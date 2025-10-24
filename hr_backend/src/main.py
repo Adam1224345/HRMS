@@ -17,41 +17,36 @@ app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'sta
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
 
-# ✅ Use Neon PostgreSQL (instead of local SQLite)
 app.config['SQLALCHEMY_DATABASE_URI'] = (
     "postgresql://neondb_owner:npg_dP1BrV2uSIbD@"
     "ep-divine-bird-addhz4kv-pooler.c-2.us-east-1.aws.neon.tech/"
-    "neondb?sslmode=require&channel_binding=require"
+    "neondb?sslmode=require"
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 jwt = JWTManager(app)
 bcrypt.init_app(app)
-CORS(app)
+CORS(app, origins="*", supports_credentials=True)  # allow all origins for Vercel
 db.init_app(app)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
-
-app.config['SWAGGER'] = {
-    'title': 'HRMS API Documentation',
-    'uiversion': 3
-}
-
 swagger_template = {
     "info": {
         "title": "HRMS API Documentation",
-        "description": "This is the Swagger UI for the Human Resource Management System backend.",
+        "description": "Human Resource Management System backend Swagger UI.",
         "version": "1.0.0",
-        "contact": {
-            "name": "HRMS Dev Team",
-            "email": "support@hrms.com",
-        },
+        "contact": {"name": "HRMS Dev Team", "email": "support@hrms.com"},
     },
-    "basePath": "/api",
-    "schemes": ["http", "https"],
+    "schemes": ["https"],
+    "securityDefinitions": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "description": "JWT Authorization header using the Bearer scheme. Example: 'Bearer {token}'"
+        }
+    },
 }
-
 swagger = Swagger(app, template=swagger_template)
-
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(role_bp, url_prefix='/api')
@@ -59,7 +54,6 @@ app.register_blueprint(task_bp, url_prefix='/api')
 app.register_blueprint(leave_bp, url_prefix='/api')
 
 def init_database():
-    """Initialize database with default roles and permissions"""
     from src.models.user import Role, Permission
 
     permissions_data = [
@@ -121,7 +115,6 @@ def init_database():
 with app.app_context():
     db.create_all()
     init_database()
-
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
     """
@@ -136,7 +129,6 @@ def hello_world():
           application/json: {"message": "Hello, Swagger is working!"}
     """
     return jsonify({"message": "Hello, Swagger is working!"})
-
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
@@ -154,4 +146,4 @@ def serve(path):
             return "index.html not found", 404
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=True)
