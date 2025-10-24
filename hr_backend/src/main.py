@@ -2,7 +2,7 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from flask import Flask, send_from_directory, jsonify, Response
+from flask import Flask, send_from_directory, jsonify
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from flasgger import Swagger
@@ -21,7 +21,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 jwt = JWTManager(app)
 bcrypt.init_app(app)
-CORS(app, resources={r"/api/*": {"origins": "*"}})  # Allow CORS for /api/* routes
+CORS(app)
 db.init_app(app)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
 
@@ -41,7 +41,7 @@ swagger_template = {
         },
     },
     "basePath": "/api",
-    "schemes": ["https"],  # Force HTTPS for Vercel
+    "schemes": ["http", "https"],
 }
 
 swagger = Swagger(app, template=swagger_template)
@@ -58,7 +58,7 @@ def init_database():
 
     permissions_data = [
         ('user_read', 'Read user information'),
-        ('user_write', 'Create and updateuszcz users'),
+        ('user_write', 'Create and update users'),
         ('user_delete', 'Delete users'),
         ('role_read', 'Read role information'),
         ('role_write', 'Create and update roles'),
@@ -131,48 +131,6 @@ def hello_world():
     """
     return jsonify({"message": "Hello, Swagger is working!"})
 
-@app.route('/api/apidocs', methods=['GET'])
-def apidocs():
-    """Serve Swagger UI"""
-    html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>HRMS API Documentation</title>
-      <meta charset="utf-8"/>
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css" />
-      <style>
-        body { margin: 0; }
-      </style>
-    </head>
-    <body>
-      <div id="swagger-ui"></div>
-      <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-      <script>
-        window.onload = function() {
-          const ui = SwaggerUIBundle({
-            url: '/api/swagger.json',  // Relative URL, inherits HTTPS on Vercel
-            dom_id: '#swagger-ui',
-            presets: [
-              SwaggerUIBundle.presets.apis,
-            ],
-          });
-          window.ui = ui;
-        };
-      </script>
-    </body>
-    </html>
-    """
-    return Response(html, mimetype='text/html')
-
-@app.route('/api/swagger.json', methods=['GET'])
-def swagger_json():
-    """Serve Swagger JSON spec"""
-    from flasgger import utils
-    spec = utils.get_spec(swagger.app)
-    return jsonify(spec)
-
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
@@ -188,3 +146,6 @@ def serve(path):
             return send_from_directory(static_folder_path, 'index.html')
         else:
             return "index.html not found", 404
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
