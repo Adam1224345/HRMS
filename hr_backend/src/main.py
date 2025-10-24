@@ -19,7 +19,7 @@ app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'sta
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
 
-# ✅ Use Neon PostgreSQL instead of SQLite
+# ✅ Use Neon PostgreSQL (no .env needed)
 app.config['SQLALCHEMY_DATABASE_URI'] = (
     "postgresql://neondb_owner:npg_dP1BrV2uSIbD@"
     "ep-divine-bird-addhz4kv-pooler.c-2.us-east-1.aws.neon.tech/"
@@ -51,8 +51,17 @@ swagger_template = {
         },
     },
     "basePath": "/api",
-    # ✅ Only use HTTPS by default (no switching)
+    # ✅ HTTPS-only (fixes missing Authorization header issue)
     "schemes": ["https"],
+    "securityDefinitions": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "description": "JWT Authorization header using the Bearer scheme. Example: 'Bearer {token}'"
+        }
+    },
+    "security": [{"Bearer": []}]
 }
 
 swagger = Swagger(app, template=swagger_template)
@@ -145,6 +154,7 @@ def hello_world():
     """
     return jsonify({"message": "Hello, Swagger is working!"})
 
+
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
@@ -161,6 +171,8 @@ def serve(path):
         else:
             return "index.html not found", 404
 
+
 # ------------------ MAIN ------------------
 if __name__ == '__main__':
+    # Run with HTTPS mode for local dev testing
     app.run(host='0.0.0.0', port=5000, debug=True)
