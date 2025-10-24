@@ -1,5 +1,7 @@
 import os
 import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
 from flask import Flask, send_from_directory, jsonify
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
@@ -11,68 +13,47 @@ from src.routes.role import role_bp
 from src.routes.task import task_bp
 from src.routes.leave import leave_bp
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
-# ----------------------
-# Flask App Initialization
-# ----------------------
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
-
-# Secrets
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
-
-# ----------------------
-# Database Config (Neon)
-# ----------------------
-app.config['SQLALCHEMY_DATABASE_URI'] = (
-    "postgresql://neondb_owner:npg_dP1BrV2uSIbD@"
-    "ep-divine-bird-addhz4kv-pooler.c-2.us-east-1.aws.neon.tech/"
-    "neondb?sslmode=require&channel_binding=require"
-)
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# ----------------------
-# Extensions
-# ----------------------
 jwt = JWTManager(app)
 bcrypt.init_app(app)
+CORS(app)
 db.init_app(app)
-CORS(app, supports_credentials=True)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
 
-# ----------------------
-# Swagger Config
-# ----------------------
-app.config['SWAGGER'] = {'title': 'HRMS API Documentation', 'uiversion': 3}
+app.config['SWAGGER'] = {
+    'title': 'HRMS API Documentation',
+    'uiversion': 3
+}
 
 swagger_template = {
     "info": {
         "title": "HRMS API Documentation",
         "description": "This is the Swagger UI for the Human Resource Management System backend.",
         "version": "1.0.0",
-        "contact": {"name": "HRMS Dev Team", "email": "support@hrms.com"},
+        "contact": {
+            "name": "HRMS Dev Team",
+            "email": "support@hrms.com",
+        },
     },
     "basePath": "/api",
-    "schemes": ["https"],  # <-- Force HTTPS for Vercel
+    "schemes": ["http", "https"],
 }
 
 swagger = Swagger(app, template=swagger_template)
 
-# ----------------------
-# Blueprints
-# ----------------------
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(role_bp, url_prefix='/api')
 app.register_blueprint(task_bp, url_prefix='/api')
 app.register_blueprint(leave_bp, url_prefix='/api')
 
-# ----------------------
-# Database Initialization
-# ----------------------
 def init_database():
-    """Initialize default roles and permissions."""
+    """Initialize database with default roles and permissions"""
     from src.models.user import Role, Permission
 
     permissions_data = [
@@ -135,9 +116,6 @@ with app.app_context():
     db.create_all()
     init_database()
 
-# ----------------------
-# Test Endpoint
-# ----------------------
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
     """
@@ -153,9 +131,6 @@ def hello_world():
     """
     return jsonify({"message": "Hello, Swagger is working!"})
 
-# ----------------------
-# Serve Frontend
-# ----------------------
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
@@ -172,9 +147,5 @@ def serve(path):
         else:
             return "index.html not found", 404
 
-# ----------------------
-# Main Entry
-# ----------------------
 if __name__ == '__main__':
-    # Use 0.0.0.0 on Vercel / Docker deployment
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
