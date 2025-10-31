@@ -18,4 +18,3 @@ flasgger==0.9.7.1
 psycopg2-binary==2.9.9
 gunicorn==23.0.0
 python-dateutil>=2.8.0
-gunicorn==22.0.0
