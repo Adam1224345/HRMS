@@ -25,6 +25,18 @@ class Leave(db.Model):
         return f'<Leave {self.leave_type} - {self.user.username}>'
 
     def to_dict(self):
+        # Explicitly fetch the user who applied for leave (employee)
+        employee = None
+        if self.user_id:
+            from src.models.user import User
+            employee = User.query.get(self.user_id)
+        
+        # Explicitly fetch the reviewer (admin/HR)
+        reviewer = None
+        if self.reviewed_by_id:
+            from src.models.user import User
+            reviewer = User.query.get(self.reviewed_by_id)
+        
         return {
             'id': self.id,
             'leave_type': self.leave_type,
@@ -34,18 +46,18 @@ class Leave(db.Model):
             'status': self.status,
             'remarks': self.remarks,
             'user': {
-                'id': self.user.id,
-                'username': self.user.username,
-                'first_name': self.user.first_name,
-                'last_name': self.user.last_name,
-                'email': self.user.email
-            } if self.user else None,
+                'id': employee.id,
+                'username': employee.username,
+                'first_name': employee.first_name,
+                'last_name': employee.last_name,
+                'email': employee.email
+            } if employee else None,
             'reviewed_by': {
-                'id': self.reviewed_by.id,
-                'username': self.reviewed_by.username,
-                'first_name': self.reviewed_by.first_name,
-                'last_name': self.reviewed_by.last_name
-            } if self.reviewed_by else None,
+                'id': reviewer.id,
+                'username': reviewer.username,
+                'first_name': reviewer.first_name,
+                'last_name': reviewer.last_name
+            } if reviewer else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
