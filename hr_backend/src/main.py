@@ -20,6 +20,7 @@ from src.routes.role import role_bp
 from src.routes.task import task_bp
 from src.routes.leave import leave_bp
 from src.routes.analytics import analytics_bp
+from src.routes.calendar import calendar_bp
 
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
@@ -58,6 +59,7 @@ app.register_blueprint(role_bp, url_prefix='/api')
 app.register_blueprint(task_bp, url_prefix='/api')
 app.register_blueprint(leave_bp, url_prefix='/api')
 app.register_blueprint(analytics_bp, url_prefix='/api')
+app.register_blueprint(calendar_bp, url_prefix='/api')
 
 
 # === Create Tables Only (NO SEEDING) ===
