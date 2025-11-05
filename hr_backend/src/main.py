@@ -1,4 +1,4 @@
-
+# main.py
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -30,17 +30,13 @@ app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# === DATABASE: AUTO SWITCH (Local: SQLite | Vercel: Neon PostgreSQL) ===
+# === DATABASE: NEON POSTGRESQL ONLY (REQUIRED) ===
 DATABASE_URL = os.getenv('DATABASE_URL')
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is required! Set it in Vercel Environment Variables.")
 
-if DATABASE_URL:
-    # Vercel/Neon → Fix postgres:// → postgresql://
-    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
-else:
-    # Local: Use SQLite
-    db_dir = os.path.join(os.path.dirname(__file__), 'database')
-    os.makedirs(db_dir, exist_ok=True)
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(db_dir, 'app.db')}"
+# Convert postgres:// → postgresql:// (required by SQLAlchemy)
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
 
 # === EXTENSIONS ===
 jwt = JWTManager(app)
