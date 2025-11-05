@@ -1,4 +1,4 @@
-# main.py
+
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -25,20 +25,31 @@ from src.routes.calendar import calendar_bp
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 
-# === Config ===
+# === CONFIG ===
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# === Extensions ===
+# === DATABASE: AUTO SWITCH (Local: SQLite | Vercel: Neon PostgreSQL) ===
+DATABASE_URL = os.getenv('DATABASE_URL')
+
+if DATABASE_URL:
+    # Vercel/Neon → Fix postgres:// → postgresql://
+    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+else:
+    # Local: Use SQLite
+    db_dir = os.path.join(os.path.dirname(__file__), 'database')
+    os.makedirs(db_dir, exist_ok=True)
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(db_dir, 'app.db')}"
+
+# === EXTENSIONS ===
 jwt = JWTManager(app)
 bcrypt.init_app(app)
 CORS(app)
 db.init_app(app)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
 
-# === Swagger ===
+# === SWAGGER ===
 app.config['SWAGGER'] = {'title': 'HRMS API Documentation', 'uiversion': 3}
 swagger_template = {
     "info": {
@@ -52,7 +63,7 @@ swagger_template = {
 }
 Swagger(app, template=swagger_template)
 
-# === Blueprints ===
+# === BLUEPRINTS ===
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(role_bp, url_prefix='/api')
@@ -62,19 +73,19 @@ app.register_blueprint(analytics_bp, url_prefix='/api')
 app.register_blueprint(calendar_bp, url_prefix='/api')
 
 
-# === Create Tables Only (NO SEEDING) ===
+# === CREATE TABLES ONLY (NO SEEDING) ===
 with app.app_context():
     db.create_all()
     print("Database tables created. Run 'python seed.py' to seed data.")
 
 
-# === Test Endpoint ===
+# === TEST ENDPOINT ===
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
     return jsonify({"message": "Hello, Swagger is working!"})
 
 
-# === Serve Frontend ===
+# === SERVE FRONTEND ===
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
