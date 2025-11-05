@@ -4,9 +4,11 @@ from src.models.user import db, User
 from src.models.leave import Leave
 from datetime import datetime
 from functools import wraps
+from flasgger import swag_from  # <-- ADDED FOR SWAGGER
 
 leave_bp = Blueprint('leave', __name__)
 
+# === HELPER DECORATORS ===
 def optional_jwt_required(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -26,9 +28,186 @@ def debug_skip_auth(func):
 def has_role(user, role_name):
     return any(role.name == role_name for role in user.roles)
 
+# === SWAGGER DOCUMENTATION (Inline) ===
+get_leaves_docs = {
+    "tags": ["Leave"],
+    "summary": "Get all leave requests (paginated)",
+    "description": "Admins/HR see all leaves. Employees see only their own.",
+    "parameters": [
+        {
+            "name": "page",
+            "in": "query",
+            "type": "integer",
+            "default": 1,
+            "description": "Page number"
+        },
+        {
+            "name": "per_page",
+            "in": "query",
+            "type": "integer",
+            "default": 10,
+            "description": "Items per page"
+        },
+        {
+            "name": "status",
+            "in": "query",
+            "type": "string",
+            "enum": ["Pending", "Approved", "Rejected"],
+            "description": "Filter by status"
+        }
+    ],
+    "responses": {
+        "200": {
+            "description": "Paginated list of leaves",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "leaves": {"type": "array", "items": {"$ref": "#/definitions/Leave"}},
+                    "total": {"type": "integer"},
+                    "page": {"type": "integer"},
+                    "per_page": {"type": "integer"},
+                    "pages": {"type": "integer"}
+                }
+            }
+        }
+    },
+    "security": [{"bearerAuth": []}]
+}
+
+get_leave_docs = {
+    "tags": ["Leave"],
+    "summary": "Get a specific leave request",
+    "parameters": [
+        {"name": "leave_id", "in": "path", "type": "integer", "required": True}
+    ],
+    "responses": {
+        "200": {"description": "Leave details", "schema": {"$ref": "#/definitions/Leave"}},
+        "404": {"description": "Leave not found"}
+    },
+    "security": [{"bearerAuth": []}]
+}
+
+create_leave_docs = {
+    "tags": ["Leave"],
+    "summary": "Create a new leave request",
+    "parameters": [
+        {
+            "name": "body",
+            "in": "body",
+            "required": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "leave_type": {"type": "string", "example": "Annual"},
+                    "start_date": {"type": "string", "format": "date", "example": "2025-12-01"},
+                    "end_date": {"type": "string", "format": "date", "example": "2025-12-05"},
+                    "reason": {"type": "string", "example": "Vacation"}
+                },
+                "required": ["leave_type", "start_date", "end_date", "reason"]
+            }
+        }
+    ],
+    "responses": {
+        "201": {"description": "Leave created", "schema": {"$ref": "#/definitions/Leave"}},
+        "400": {"description": "Invalid input"}
+    },
+    "security": [{"bearerAuth": []}]
+}
+
+update_leave_docs = {
+    "tags": ["Leave"],
+    "summary": "Update a leave request",
+    "description": "Admin/HR can update status. Owner can edit if Pending.",
+    "parameters": [
+        {"name": "leave_id", "in": "path", "type": "integer", "required": True},
+        {
+            "name": "body",
+            "in": "body",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "leave_type": {"type": "string"},
+                    "start_date": {"type": "string", "format": "date"},
+                    "end_date": {"type": "string", "format": "date"},
+                    "reason": {"type": "string"},
+                    "status": {"type": "string", "enum": ["Pending", "Approved", "Rejected"]},
+                    "remarks": {"type": "string"}
+                }
+            }
+        }
+    ],
+    "responses": {
+        "200": {"description": "Leave updated"},
+        "403": {"description": "Forbidden"},
+        "404": {"description": "Not found"}
+    },
+    "security": [{"bearerAuth": []}]
+}
+
+delete_leave_docs = {
+    "tags": ["Leave"],
+    "summary": "Delete a leave request",
+    "description": "Admin or owner (if Pending) can delete.",
+    "parameters": [
+        {"name": "leave_id", "in": "path", "type": "integer", "required": True}
+    ],
+    "responses": {
+        "200": {"description": "Leave deleted"},
+        "403": {"description": "Forbidden"},
+        "404": {"description": "Not found"}
+    },
+    "security": [{"bearerAuth": []}]
+}
+
+approve_leave_docs = {
+    "tags": ["Leave"],
+    "summary": "Approve a leave request (Admin/HR only)",
+    "parameters": [
+        {"name": "leave_id", "in": "path", "type": "integer", "required": True},
+        {
+            "name": "body",
+            "in": "body",
+            "schema": {
+                "type": "object",
+                "properties": {"remarks": {"type": "string", "example": "Approved"}}
+            }
+        }
+    ],
+    "responses": {
+        "200": {"description": "Leave approved"},
+        "403": {"description": "Forbidden"},
+        "404": {"description": "Not found"}
+    },
+    "security": [{"bearerAuth": []}]
+}
+
+reject_leave_docs = {
+    "tags": ["Leave"],
+    "summary": "Reject a leave request (Admin/HR only)",
+    "parameters": [
+        {"name": "leave_id", "in": "path", "type": "integer", "required": True},
+        {
+            "name": "body",
+            "in": "body",
+            "schema": {
+                "type": "object",
+                "properties": {"remarks": {"type": "string", "example": "Insufficient balance"}}
+            }
+        }
+    ],
+    "responses": {
+        "200": {"description": "Leave rejected"},
+        "403": {"description": "Forbidden"},
+        "404": {"description": "Not found"}
+    },
+    "security": [{"bearerAuth": []}]
+}
+
+# === ROUTES WITH SWAGGER ===
 @leave_bp.route('/leaves', methods=['GET'])
 @optional_jwt_required
 @debug_skip_auth
+@swag_from(get_leaves_docs)
 def get_leaves():
     try:
         if current_app.config.get("DEBUG", False):
@@ -66,9 +245,11 @@ def get_leaves():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @leave_bp.route('/leaves/<int:leave_id>', methods=['GET'])
 @optional_jwt_required
 @debug_skip_auth
+@swag_from(get_leave_docs)
 def get_leave(leave_id):
     try:
         if current_app.config.get("DEBUG", False):
@@ -87,9 +268,11 @@ def get_leave(leave_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @leave_bp.route('/leaves', methods=['POST'])
 @optional_jwt_required
 @debug_skip_auth
+@swag_from(create_leave_docs)
 def create_leave():
     try:
         if current_app.config.get("DEBUG", False):
@@ -135,9 +318,11 @@ def create_leave():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+
 @leave_bp.route('/leaves/<int:leave_id>', methods=['PUT'])
 @optional_jwt_required
 @debug_skip_auth
+@swag_from(update_leave_docs)
 def update_leave(leave_id):
     try:
         if current_app.config.get("DEBUG", False):
@@ -153,9 +338,7 @@ def update_leave(leave_id):
         data = request.get_json()
         
         if current_app.config.get("DEBUG", False):
-            if 'status' in data:
-                if data['status'] not in ['Pending', 'Approved', 'Rejected']:
-                    return jsonify({'error': 'Invalid status'}), 400
+            if 'status' in data and data['status'] in ['Pending', 'Approved', 'Rejected']:
                 leave.status = data['status']
                 leave.reviewed_by_id = current_user_id
             if 'remarks' in data:
@@ -179,9 +362,7 @@ def update_leave(leave_id):
                 return jsonify({'error': 'End date must be after start date'}), 400
         else:
             if has_role(user, 'Admin') or has_role(user, 'HR'):
-                if 'status' in data:
-                    if data['status'] not in ['Pending', 'Approved', 'Rejected']:
-                        return jsonify({'error': 'Invalid status'}), 400
+                if 'status' in data and data['status'] in ['Pending', 'Approved', 'Rejected']:
                     leave.status = data['status']
                     leave.reviewed_by_id = current_user_id
                 if 'remarks' in data:
@@ -218,9 +399,11 @@ def update_leave(leave_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+
 @leave_bp.route('/leaves/<int:leave_id>', methods=['DELETE'])
 @optional_jwt_required
 @debug_skip_auth
+@swag_from(delete_leave_docs)
 def delete_leave(leave_id):
     try:
         if current_app.config.get("DEBUG", False):
@@ -246,9 +429,11 @@ def delete_leave(leave_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+
 @leave_bp.route('/leaves/<int:leave_id>/approve', methods=['POST'])
 @optional_jwt_required
 @debug_skip_auth
+@swag_from(approve_leave_docs)
 def approve_leave(leave_id):
     try:
         if current_app.config.get("DEBUG", False):
@@ -281,9 +466,11 @@ def approve_leave(leave_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+
 @leave_bp.route('/leaves/<int:leave_id>/reject', methods=['POST'])
 @optional_jwt_required
 @debug_skip_auth
+@swag_from(reject_leave_docs)
 def reject_leave(leave_id):
     try:
         if current_app.config.get("DEBUG", False):
