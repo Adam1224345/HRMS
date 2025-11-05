@@ -31,23 +31,16 @@ app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# DATABASE: NEON POSTGRESQL ONLY
-DATABASE_URL = os.getenv('DATABASE_URL')
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is missing! Add it in Vercel → Settings → Environment Variables")
-
-# Fix postgres:// → postgresql://
-if DATABASE_URL.startswith('postgres://'):
-    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
-
-app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+# DATABASE: NEON POSTGRESQL (HARDCODED — NO ENV)
+app.config['SQLALCHEMY_DATABASE_URI'] = \
+    'postgresql://neondb_owner:npg_dP1BrV2uSIbD@ep-divine-bird-addhz4kv-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
 
 # EXTENSIONS
 jwt = JWTManager(app)
 bcrypt.init_app(app)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 db.init_app(app)
-jwt.token_in_blocklist_loader(check_if_token_revoked)
+jwt.token_in_blocklist, check_if_token_revoked)
 
 # SWAGGER
 Swagger(app, template={
