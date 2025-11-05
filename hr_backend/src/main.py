@@ -5,16 +5,34 @@ import traceback
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from flask import Flask, send_from_directory, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from flasgger import Swagger
 
-# MODELS
-from src.models.user import db, bcrypt, User, Role
+# === CREATE APP ===
+app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
+
+# === CONFIG ===
+app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
+app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_DATABASE_URI'] = \
+    'postgresql://neondb_owner:npg_dP1BrV2uSIbD@ep-divine-bird-addhz4kv-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+
+# === EXTENSIONS (MUST BE AFTER APP) ===
+db = SQLAlchemy(app)
+bcrypt = Bcrypt(app)
+jwt = JWTManager(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# === MODELS (IMPORT AFTER DB) ===
+from src.models.user import User, Role
 from src.models.task import Task
 from src.models.leave import Leave
 
-# BLUEPRINTS
+# === BLUEPRINTS ===
 from src.routes.user import user_bp
 from src.routes.auth import auth_bp, check_if_token_revoked
 from src.routes.role import role_bp
@@ -23,33 +41,17 @@ from src.routes.leave import leave_bp
 from src.routes.analytics import analytics_bp
 from src.routes.calendar import calendar_bp
 
-# FLASK APP
-app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
+# === JWT BLOCKLIST ===
+jwt.token_in_blocklist_loader(check_if_token_revoked)
 
-# CONFIG
-app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
-app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# DATABASE: NEON POSTGRESQL (HARDCODED — NO ENV)
-app.config['SQLALCHEMY_DATABASE_URI'] = \
-    'postgresql://neondb_owner:npg_dP1BrV2uSIbD@ep-divine-bird-addhz4kv-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
-
-# EXTENSIONS
-jwt = JWTManager(app)
-bcrypt.init_app(app)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
-db.init_app(app)
-jwt.token_in_blocklist, check_if_token_revoked)
-
-# SWAGGER
+# === SWAGGER ===
 Swagger(app, template={
     "info": {"title": "HRMS API", "version": "1.0.0"},
     "basePath": "/api",
     "schemes": ["https"]
 })
 
-# BLUEPRINTS
+# === REGISTER BLUEPRINTS ===
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(role_bp, url_prefix='/api')
@@ -58,30 +60,31 @@ app.register_blueprint(leave_bp, url_prefix='/api')
 app.register_blueprint(analytics_bp, url_prefix='/api')
 app.register_blueprint(calendar_bp, url_prefix='/api')
 
-# CREATE TABLES
-with app.app_context():
+# === CREATE TABLES (ONLY ON FIRST REQUEST) ===
+@app.before_first_request
+def create_tables():
     try:
         db.create_all()
-        print("Tables created")
+        print("Tables created successfully")
     except Exception as e:
-        print("Table creation failed:", e)
+        print("Failed to create tables:", e)
         traceback.print_exc()
 
-# HEALTH CHECK
+# === HEALTH CHECK ===
 @app.route('/api/health')
 def health():
     try:
         db.engine.execute("SELECT 1").scalar()
-        return jsonify({"status": "ok"}), 200
+        return jsonify({"status": "ok", "db": "connected"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# TEST
+# === TEST ENDPOINT ===
 @app.route('/api/hello')
 def hello():
-    return jsonify({"message": "API is live"})
+    return jsonify({"message": "HRMS API is LIVE on Vercel!"})
 
-# SERVE FRONTEND
+# === SERVE FRONTEND ===
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
@@ -95,12 +98,13 @@ def serve(path):
         return send_from_directory(static, 'index.html')
     return "index.html not found", 404
 
-# 500 HANDLER
+# === 500 ERROR HANDLER ===
 @app.errorhandler(500)
-def error(e):
-    print("500:", e)
+def internal_error(e):
+    print("500 Error:", e)
     traceback.print_exc()
     return jsonify({"error": "Server error"}), 500
 
+# === RUN ===
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
