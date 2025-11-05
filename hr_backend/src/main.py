@@ -25,27 +25,27 @@ from src.routes.calendar import calendar_bp
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 
-# === CONFIG ===
+# === App Configuration ===
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
+
+# === PostgreSQL (Neon Database) ===
+# Direct connection (no .env file)
+app.config['SQLALCHEMY_DATABASE_URI'] = (
+    'postgresql://neondb_owner:npg_dP1BrV2uSIbD@'
+    'ep-divine-bird-addhz4kv-pooler.c-2.us-east-1.aws.neon.tech/'
+    'neondb?sslmode=require&channel_binding=require'
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# === DATABASE: NEON POSTGRESQL ONLY (REQUIRED) ===
-DATABASE_URL = os.getenv('DATABASE_URL')
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is required! Set it in Vercel Environment Variables.")
-
-# Convert postgres:// → postgresql:// (required by SQLAlchemy)
-app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
-
-# === EXTENSIONS ===
+# === Initialize Extensions ===
 jwt = JWTManager(app)
 bcrypt.init_app(app)
 CORS(app)
 db.init_app(app)
 jwt.token_in_blocklist_loader(check_if_token_revoked)
 
-# === SWAGGER ===
+# === Swagger Setup ===
 app.config['SWAGGER'] = {'title': 'HRMS API Documentation', 'uiversion': 3}
 swagger_template = {
     "info": {
@@ -59,7 +59,7 @@ swagger_template = {
 }
 Swagger(app, template=swagger_template)
 
-# === BLUEPRINTS ===
+# === Register Blueprints ===
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(role_bp, url_prefix='/api')
@@ -68,20 +68,20 @@ app.register_blueprint(leave_bp, url_prefix='/api')
 app.register_blueprint(analytics_bp, url_prefix='/api')
 app.register_blueprint(calendar_bp, url_prefix='/api')
 
-
-# === CREATE TABLES ONLY (NO SEEDING) ===
+# === Create Tables Safely ===
 with app.app_context():
-    db.create_all()
-    print("Database tables created. Run 'python seed.py' to seed data.")
+    try:
+        db.create_all()
+        print("✅ Database tables verified/created successfully.")
+    except Exception as e:
+        print(f"⚠️ Database initialization error: {e}")
 
-
-# === TEST ENDPOINT ===
+# === Test Endpoint ===
 @app.route('/api/hello', methods=['GET'])
 def hello_world():
     return jsonify({"message": "Hello, Swagger is working!"})
 
-
-# === SERVE FRONTEND ===
+# === Serve Frontend ===
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
@@ -95,6 +95,6 @@ def serve(path):
         return send_from_directory(static, 'index.html')
     return "index.html not found", 404
 
-
 if __name__ == '__main__':
+    # Works both locally and when deployed (e.g., on Vercel)
     app.run(host='0.0.0.0', port=5000, debug=True)
