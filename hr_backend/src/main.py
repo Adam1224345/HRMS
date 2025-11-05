@@ -21,13 +21,13 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_DATABASE_URI'] = \
     'postgresql://neondb_owner:npg_dP1BrV2uSIbD@ep-divine-bird-addhz4kv-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
 
-# === EXTENSIONS (MUST BE AFTER APP) ===
+# === EXTENSIONS (MUST BE HERE) ===
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 jwt = JWTManager(app)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-# === MODELS (IMPORT AFTER DB) ===
+# === NOW IMPORT MODELS (AFTER DB) ===
 from src.models.user import User, Role
 from src.models.task import Task
 from src.models.leave import Leave
@@ -41,7 +41,7 @@ from src.routes.leave import leave_bp
 from src.routes.analytics import analytics_bp
 from src.routes.calendar import calendar_bp
 
-# === JWT BLOCKLIST ===
+# === JWT ===
 jwt.token_in_blocklist_loader(check_if_token_revoked)
 
 # === SWAGGER ===
@@ -60,29 +60,29 @@ app.register_blueprint(leave_bp, url_prefix='/api')
 app.register_blueprint(analytics_bp, url_prefix='/api')
 app.register_blueprint(calendar_bp, url_prefix='/api')
 
-# === CREATE TABLES (ONLY ON FIRST REQUEST) ===
+# === CREATE TABLES (SAFE) ===
 @app.before_first_request
 def create_tables():
     try:
         db.create_all()
-        print("Tables created successfully")
+        print("Tables created")
     except Exception as e:
-        print("Failed to create tables:", e)
+        print("Failed:", e)
         traceback.print_exc()
 
-# === HEALTH CHECK ===
+# === HEALTH ===
 @app.route('/api/health')
 def health():
     try:
         db.engine.execute("SELECT 1").scalar()
-        return jsonify({"status": "ok", "db": "connected"}), 200
+        return jsonify({"status": "OK"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# === TEST ENDPOINT ===
+# === HELLO ===
 @app.route('/api/hello')
 def hello():
-    return jsonify({"message": "HRMS API is LIVE on Vercel!"})
+    return jsonify({"message": "API LIVE"})
 
 # === SERVE FRONTEND ===
 @app.route('/', defaults={'path': ''})
@@ -90,18 +90,18 @@ def hello():
 def serve(path):
     static = app.static_folder
     if not static or not os.path.exists(static):
-        return "Static folder missing", 500
+        return "No static", 500
     if path and os.path.exists(os.path.join(static, path)):
         return send_from_directory(static, path)
-    index_path = os.path.join(static, 'index.html')
-    if os.path.exists(index_path):
+    index = os.path.join(static, 'index.html')
+    if os.path.exists(index):
         return send_from_directory(static, 'index.html')
-    return "index.html not found", 404
+    return "Not found", 404
 
-# === 500 ERROR HANDLER ===
+# === 500 ===
 @app.errorhandler(500)
-def internal_error(e):
-    print("500 Error:", e)
+def error(e):
+    print("500:", e)
     traceback.print_exc()
     return jsonify({"error": "Server error"}), 500
 
