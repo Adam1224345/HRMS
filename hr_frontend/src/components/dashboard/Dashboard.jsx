@@ -16,7 +16,8 @@ import {
   Menu,
   X,
   ClipboardList,
-  CalendarCheck
+  CalendarCheck,
+  ScrollText
 } from 'lucide-react';
 import {
   Table,
@@ -35,6 +36,7 @@ import AdminDashboard from './AdminDashboard';
 import EmployeeDashboard from './EmployeeDashboard';
 import LeaveManagement from './LeaveManagement';
 import CalendarView from './CalendarView';
+import AuditLogView from './AuditLogView';
 
 // Simple Error Boundary Component
 class ErrorBoundary extends React.Component {
@@ -105,6 +107,12 @@ const Dashboard = () => {
       show: hasPermission('leave_read') || hasPermission('task_read')
     },
     {
+      id: 'audit-logs',
+      label: 'Audit Logs',
+      icon: ScrollText,
+      show: hasRole('Admin') || hasRole('HR')
+    },
+    {
       id: 'profile',
       label: 'Profile Settings',
       icon: Settings,
@@ -152,6 +160,12 @@ const Dashboard = () => {
         return (
           <ErrorBoundary>
             <CalendarView />
+          </ErrorBoundary>
+        );
+      case 'audit-logs':
+        return (
+          <ErrorBoundary>
+            <AuditLogView />
           </ErrorBoundary>
         );
       case 'profile':
