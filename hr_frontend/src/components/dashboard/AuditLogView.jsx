@@ -1,4 +1,4 @@
-// src/components/AuditLogView.jsx
+// src/views/AuditLogView.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -20,17 +20,27 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 import { Search, RotateCcw } from 'lucide-react';
+import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+// ---------------------------------------------------------------
+// SAFE AXIOS BASE URL – works on localhost **and** Vercel
+// ---------------------------------------------------------------
+if (!axios.defaults.baseURL) {
+  const isDev = process.env.NODE_ENV === 'development';
+  axios.defaults.baseURL = isDev ? 'http://localhost:5000/api' : '/api';
+}
 
 const AuditLogView = () => {
+  // -----------------------------------------------------------------
+  // State
+  // -----------------------------------------------------------------
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalLogs, setTotalLogs] = useState(0);
-  const [perPage] = useState(20);
+  const perPage = 20;
 
   // Filters
   const [userIdFilter, setUserIdFilter] = useState('');
@@ -38,43 +48,61 @@ const AuditLogView = () => {
   const [startDateFilter, setStartDateFilter] = useState('');
   const [endDateFilter, setEndDateFilter] = useState('');
 
+  // -----------------------------------------------------------------
+  // Fetch logs (axios version – mirrors CalendarView)
+  // -----------------------------------------------------------------
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     setError(null);
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('Please log in first.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const params = new URLSearchParams({
-        page: page,
-        per_page: perPage,
+      const params = {
+        page: page.toString(),
+        per_page: perPage.toString(),
+        ...(userIdFilter && { user_id: userIdFilter }),
+        ...(actionFilter && { action: actionFilter }),
+        ...(startDateFilter && { start_date: startDateFilter }),
+        ...(endDateFilter && { end_date: endDateFilter }),
+      };
+
+      const response = await axios.get('/audit-logs', {
+        headers: { Authorization: `Bearer ${token}` },
+        params,
       });
 
-      if (userIdFilter) params.append('user_id', userIdFilter);
-      if (actionFilter) params.append('action', actionFilter);
-      if (startDateFilter) params.append('start_date', startDateFilter);
-      if (endDateFilter) params.append('end_date', endDateFilter);
-
-      const response = await fetch(`${API_BASE_URL}/audit-logs?${params.toString()}`);
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = response.data;
       setLogs(data.logs || []);
       setTotalLogs(data.total ?? 0);
       setTotalPages(data.pages ?? 1);
     } catch (err) {
       console.error('Audit log fetch error:', err);
-      setError(err.message || 'Failed to load logs');
+      const msg =
+        err.response?.data?.error ||
+        err.message ||
+        'Failed to load logs';
+      setError(msg);
     } finally {
       setLoading(false);
     }
-  }, [page, perPage, userIdFilter, actionFilter, startDateFilter, endDateFilter]);
+  }, [page, userIdFilter, actionFilter, startDateFilter, endDateFilter]);
 
+  // -----------------------------------------------------------------
+  // Effects
+  // -----------------------------------------------------------------
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
 
+  // -----------------------------------------------------------------
+  // Handlers
+  // -----------------------------------------------------------------
   const handleFilter = () => {
     setPage(1);
     fetchLogs();
@@ -89,7 +117,25 @@ const AuditLogView = () => {
     fetchLogs();
   };
 
-  const formatTimestamp = (ts) => new Date(ts).toLocaleString();
+  // -----------------------------------------------------------------
+  // Helpers (same as original)
+  // -----------------------------------------------------------------
+  const formatTimestamp = (ts) => {
+    try {
+      return new Date(ts).toLocaleString('en-GB', {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+      });
+    } catch {
+      return 'Invalid Date';
+    }
+  };
+
   const formatDetails = (details) => {
     if (!details) return <span className="text-xs text-gray-500">—</span>;
     try {
@@ -99,27 +145,33 @@ const AuditLogView = () => {
           {Object.entries(obj).map(([k, v]) => (
             <li key={k}>
               <strong>{k}:</strong>{' '}
-              {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+              <span className="font-mono">
+                {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+              </span>
             </li>
           ))}
         </ul>
       );
     } catch {
-      return <span className="text-xs">{details}</span>;
+      return <span className="text-xs font-mono">{details}</span>;
     }
   };
 
+  // -----------------------------------------------------------------
+  // Render
+  // -----------------------------------------------------------------
   return (
     <div className="space-y-6 p-4">
       <Card>
         <CardHeader>
           <CardTitle>Audit Logs ({totalLogs} total)</CardTitle>
         </CardHeader>
+
         <CardContent>
-          {/* Filters */}
+          {/* ---------- Filters ---------- */}
           <div className="flex flex-wrap gap-3 mb-6 items-end">
             <div className="flex-1 min-w-[140px]">
-              <label className="text-sm font-medium">User ID</label>
+              <label className="text-sm font-medium block mb-1">User ID</label>
               <Input
                 type="number"
                 placeholder="e.g. 5"
@@ -127,45 +179,59 @@ const AuditLogView = () => {
                 onChange={(e) => setUserIdFilter(e.target.value)}
               />
             </div>
+
             <div className="flex-1 min-w-[180px]">
-              <label className="text-sm font-medium">Action</label>
+              <label className="text-sm font-medium block mb-1">Action</label>
               <Input
                 placeholder="e.g. LOGIN"
                 value={actionFilter}
                 onChange={(e) => setActionFilter(e.target.value)}
               />
             </div>
+
             <div className="flex-1 min-w-[160px]">
-              <label className="text-sm font-medium">Start Date</label>
+              <label className="text-sm font-medium block mb-1">Start Date</label>
               <Input
                 type="date"
                 value={startDateFilter}
                 onChange={(e) => setStartDateFilter(e.target.value)}
               />
             </div>
+
             <div className="flex-1 min-w-[160px]">
-              <label className="text-sm font-medium">End Date</label>
+              <label className="text-sm font-medium block mb-1">End Date</label>
               <Input
                 type="date"
                 value={endDateFilter}
                 onChange={(e) => setEndDateFilter(e.target.value)}
               />
             </div>
+
             <Button onClick={handleFilter} size="sm">
               <Search className="h-4 w-4 mr-1" />
               Filter
             </Button>
+
             <Button onClick={handleReset} variant="outline" size="sm">
               <RotateCcw className="h-4 w-4 mr-1" />
               Reset
             </Button>
           </div>
 
-          {/* Loading / Error */}
-          {loading && <p className="text-center text-muted-foreground">Loading...</p>}
-          {error && <p className="text-red-500 text-center">Error: {error}</p>}
+          {/* ---------- Loading / Error ---------- */}
+          {loading && (
+            <p className="text-center text-muted-foreground py-4">
+              Loading logs...
+            </p>
+          )}
 
-          {/* Table */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+              <strong>Error:</strong> {error}
+            </div>
+          )}
+
+          {/* ---------- Table ---------- */}
           {!loading && !error && logs.length > 0 && (
             <>
               <div className="overflow-x-auto border rounded-md">
@@ -174,22 +240,29 @@ const AuditLogView = () => {
                     <TableRow>
                       <TableHead className="w-[60px]">ID</TableHead>
                       <TableHead className="w-[80px]">User ID</TableHead>
-                      <TableHead className="w-[140px]">Action</TableHead>
-                      <TableHead className="w-[100px]">Resource</TableHead>
+                      <TableHead className="w-[160px]">Action</TableHead>
+                      <TableHead className="w-[110px]">Resource</TableHead>
                       <TableHead className="w-[100px]">Res ID</TableHead>
-                      <TableHead className="w-[160px]">Timestamp</TableHead>
-                      <TableHead>Details</TableHead>
+                      <TableHead className="w-[170px]">Timestamp</TableHead>
+                      <TableHead className="min-w-[200px]">Details</TableHead>
                     </TableRow>
                   </TableHeader>
+
                   <TableBody>
                     {logs.map((log) => (
-                      <TableRow key={log.id}>
+                      <TableRow key={log.id} className="hover:bg-muted/50">
                         <TableCell className="font-medium">{log.id}</TableCell>
                         <TableCell>{log.user_id}</TableCell>
-                        <TableCell>{log.action}</TableCell>
+                        <TableCell>
+                          <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                            {log.action}
+                          </code>
+                        </TableCell>
                         <TableCell>{log.resource_type || '—'}</TableCell>
                         <TableCell>{log.resource_id || '—'}</TableCell>
-                        <TableCell>{formatTimestamp(log.timestamp)}</TableCell>
+                        <TableCell className="text-xs">
+                          {formatTimestamp(log.timestamp)}
+                        </TableCell>
                         <TableCell className="max-w-xs">
                           {formatDetails(log.details)}
                         </TableCell>
@@ -199,7 +272,7 @@ const AuditLogView = () => {
                 </Table>
               </div>
 
-              {/* Pagination */}
+              {/* ---------- Pagination ---------- */}
               <Pagination className="mt-6">
                 <PaginationContent>
                   <PaginationItem>
@@ -208,21 +281,31 @@ const AuditLogView = () => {
                       disabled={page === 1}
                     />
                   </PaginationItem>
-                  {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                    const p = i + 1;
-                    return (
-                      <PaginationItem key={p}>
-                        <PaginationLink onClick={() => setPage(p)} isActive={p === page}>
-                          {p}
-                        </PaginationLink>
-                      </PaginationItem>
-                    );
-                  })}
+
+                  {Array.from(
+                    { length: Math.min(totalPages, 7) },
+                    (_, i) => {
+                      const p = i + 1;
+                      return (
+                        <PaginationItem key={p}>
+                          <PaginationLink
+                            onClick={() => setPage(p)}
+                            isActive={p === page}
+                            className="cursor-pointer"
+                          >
+                            {p}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    }
+                  )}
+
                   {totalPages > 7 && (
                     <PaginationItem>
-                      <span className="px-2">...</span>
+                      <span className="px-2 text-muted-foreground">...</span>
                     </PaginationItem>
                   )}
+
                   <PaginationItem>
                     <PaginationNext
                       onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
@@ -234,11 +317,14 @@ const AuditLogView = () => {
             </>
           )}
 
-          {/* Empty State */}
+          {/* ---------- Empty State ---------- */}
           {!loading && !error && logs.length === 0 && (
-            <p className="text-center text-muted-foreground py-8">
-              No logs found. Try adjusting filters.
-            </p>
+            <div className="text-center py-12 text-muted-foreground">
+              <p className="text-lg mb-2">No audit logs found</p>
+              <p className="text-sm">
+                Try adjusting your filters or create some activity.
+              </p>
+            </div>
           )}
         </CardContent>
       </Card>
