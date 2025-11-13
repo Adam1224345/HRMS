@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import LoginPage from './components/auth/LoginPage';
 import RegisterPage from './components/auth/RegisterPage';
 import ForgotPasswordPage from './components/auth/ForgotPasswordPage';
@@ -22,7 +23,11 @@ function AuthenticatedApp() {
   }
 
   if (user) {
-    return <Dashboard />;
+    return (
+      <NotificationProvider>
+        <Dashboard />
+      </NotificationProvider>
+    );
   }
 
   return <AuthFlow />;

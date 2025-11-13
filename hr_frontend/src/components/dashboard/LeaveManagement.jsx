@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { 
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { 
+import {
   Table,
   TableBody,
   TableCell,
@@ -29,10 +29,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { 
-  Calendar, 
-  Plus, 
-  Search, 
+import {
+  Calendar,
+  Plus,
+  Search,
   Check,
   X,
   Trash2,
@@ -41,7 +41,7 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
-  Clock
+  Clock,
 } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../../contexts/AuthContext';
@@ -59,16 +59,19 @@ const LeaveManagement = () => {
   const [selectedLeave, setSelectedLeave] = useState(null);
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [page, setPage] = useState(1); // Track current page
+  const [perPage] = useState(10); // Items per page
+  const [totalPages, setTotalPages] = useState(1); // Total pages from API
 
   const [formData, setFormData] = useState({
     leave_type: 'Sick Leave',
     start_date: '',
     end_date: '',
-    reason: ''
+    reason: '',
   });
 
   const [reviewData, setReviewData] = useState({
-    remarks: ''
+    remarks: '',
   });
 
   const canApproveLeaves = hasRole('Admin') || hasRole('HR');
@@ -76,16 +79,35 @@ const LeaveManagement = () => {
 
   useEffect(() => {
     fetchLeaves();
-  }, []);
+  }, [page]); // Re-fetch when page changes
 
-  const fetchLeaves = async () => {
+  const fetchLeaves = async (resetFilters = false) => {
     try {
-      const response = await axios.get('/leaves');
-      setLeaves(response.data.leaves || []);
+      setLoading(true);
+      // Reset filters if requested (e.g., after create/delete)
+      const currentSearchTerm = resetFilters ? '' : searchTerm;
+      const currentStatusFilter = resetFilters ? 'all' : statusFilter;
+
+      const response = await axios.get('/leaves', {
+        params: {
+          page,
+          per_page: perPage,
+          status: currentStatusFilter === 'all' ? undefined : currentStatusFilter,
+        },
+      });
+
+      const { leaves, total, pages } = response.data;
+      setLeaves(leaves || []);
+      setTotalPages(pages || 1);
+      if (resetFilters) {
+        setSearchTerm('');
+        setStatusFilter('all');
+        setPage(1); // Reset to first page
+      }
       setError('');
     } catch (error) {
       setError('Failed to fetch leave requests');
-      console.error('Error fetching leaves:', error);
+      console.error('Error fetching leaves:', error.response?.data || error.message);
     } finally {
       setLoading(false);
     }
@@ -95,12 +117,12 @@ const LeaveManagement = () => {
     e.preventDefault();
     setError('');
     setSuccess('');
-    
+
     try {
       await axios.post('/leaves', formData);
       setIsCreateDialogOpen(false);
       resetForm();
-      fetchLeaves();
+      await fetchLeaves(true); // Reset filters and fetch first page
       setSuccess('Leave request submitted successfully!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
@@ -112,12 +134,12 @@ const LeaveManagement = () => {
     e.preventDefault();
     setError('');
     setSuccess('');
-    
+
     try {
       await axios.put(`/leaves/${selectedLeave.id}`, formData);
       setIsEditDialogOpen(false);
       resetForm();
-      fetchLeaves();
+      await fetchLeaves(true); // Reset filters and fetch first page
       setSuccess('Leave request updated successfully!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
@@ -128,12 +150,12 @@ const LeaveManagement = () => {
   const handleApproveLeave = async (leaveId) => {
     setError('');
     setSuccess('');
-    
+
     try {
       await axios.post(`/leaves/${leaveId}/approve`, reviewData);
       setIsReviewDialogOpen(false);
       setReviewData({ remarks: '' });
-      fetchLeaves();
+      await fetchLeaves(true); // Reset filters and fetch first page
       setSuccess('Leave request approved successfully!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
@@ -144,12 +166,12 @@ const LeaveManagement = () => {
   const handleRejectLeave = async (leaveId) => {
     setError('');
     setSuccess('');
-    
+
     try {
       await axios.post(`/leaves/${leaveId}/reject`, reviewData);
       setIsReviewDialogOpen(false);
       setReviewData({ remarks: '' });
-      fetchLeaves();
+      await fetchLeaves(true); // Reset filters and fetch first page
       setSuccess('Leave request rejected successfully!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
@@ -161,10 +183,10 @@ const LeaveManagement = () => {
     if (window.confirm('Are you sure you want to delete this leave request?')) {
       setError('');
       setSuccess('');
-      
+
       try {
         await axios.delete(`/leaves/${leaveId}`);
-        fetchLeaves();
+        await fetchLeaves(true); // Reset filters and fetch first page
         setSuccess('Leave request deleted successfully!');
         setTimeout(() => setSuccess(''), 3000);
       } catch (error) {
@@ -178,7 +200,7 @@ const LeaveManagement = () => {
       leave_type: 'Sick Leave',
       start_date: '',
       end_date: '',
-      reason: ''
+      reason: '',
     });
     setSelectedLeave(null);
   };
@@ -189,7 +211,7 @@ const LeaveManagement = () => {
       leave_type: leave.leave_type,
       start_date: leave.start_date,
       end_date: leave.end_date,
-      reason: leave.reason
+      reason: leave.reason,
     });
     setIsEditDialogOpen(true);
   };
@@ -205,26 +227,26 @@ const LeaveManagement = () => {
     setIsViewDialogOpen(true);
   };
 
-  const filteredLeaves = leaves.filter(leave => {
-    const matchesSearch = 
+  const filteredLeaves = leaves.filter((leave) => {
+    const matchesSearch =
       leave.leave_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      leave.user?.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (leave.user?.username || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       leave.reason.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesStatus = statusFilter === 'all' || leave.status === statusFilter;
-    
+
     return matchesSearch && matchesStatus;
   });
 
   const getStatusBadge = (status) => {
     const config = {
-      'Pending': { variant: 'secondary', icon: Clock, color: 'text-yellow-600' },
-      'Approved': { variant: 'default', icon: CheckCircle2, color: 'text-green-600' },
-      'Rejected': { variant: 'destructive', icon: XCircle, color: 'text-red-600' }
+      Pending: { variant: 'secondary', icon: Clock, color: 'text-yellow-600' },
+      Approved: { variant: 'default', icon: CheckCircle2, color: 'text-green-600' },
+      Rejected: { variant: 'destructive', icon: XCircle, color: 'text-red-600' },
     };
-    
+
     const { icon: Icon, color } = config[status] || config['Pending'];
-    
+
     return (
       <Badge variant={config[status]?.variant || 'secondary'} className="flex items-center gap-1">
         <Icon className={`h-3 w-3 ${color}`} />
@@ -247,23 +269,24 @@ const LeaveManagement = () => {
       'Casual Leave': 'bg-blue-100 text-blue-800 border-blue-200',
       'Vacation': 'bg-purple-100 text-purple-800 border-purple-200',
       'Personal Leave': 'bg-green-100 text-green-800 border-green-200',
-      'Emergency Leave': 'bg-orange-100 text-orange-800 border-orange-200'
+      'Emergency Leave': 'bg-orange-100 text-orange-800 border-orange-200',
     };
     return colors[type] || 'bg-gray-100 text-gray-800 border-gray-200';
   };
 
-  // Statistics for HR/Admin
-  const stats = canApproveLeaves ? {
-    total: leaves.length,
-    pending: leaves.filter(l => l.status === 'Pending').length,
-    approved: leaves.filter(l => l.status === 'Approved').length,
-    rejected: leaves.filter(l => l.status === 'Rejected').length
-  } : {
-    total: leaves.length,
-    pending: leaves.filter(l => l.status === 'Pending').length,
-    approved: leaves.filter(l => l.status === 'Approved').length,
-    rejected: leaves.filter(l => l.status === 'Rejected').length
-  };
+  const stats = canApproveLeaves
+    ? {
+        total: leaves.length,
+        pending: leaves.filter((l) => l.status === 'Pending').length,
+        approved: leaves.filter((l) => l.status === 'Approved').length,
+        rejected: leaves.filter((l) => l.status === 'Rejected').length,
+      }
+    : {
+        total: leaves.length,
+        pending: leaves.filter((l) => l.status === 'Pending').length,
+        approved: leaves.filter((l) => l.status === 'Approved').length,
+        rejected: leaves.filter((l) => l.status === 'Rejected').length,
+      };
 
   if (loading) {
     return (
@@ -301,9 +324,9 @@ const LeaveManagement = () => {
             <form onSubmit={handleCreateLeave} className="space-y-4">
               <div>
                 <Label htmlFor="leave_type">Leave Type</Label>
-                <Select 
-                  value={formData.leave_type} 
-                  onValueChange={(value) => setFormData({...formData, leave_type: value})}
+                <Select
+                  value={formData.leave_type}
+                  onValueChange={(value) => setFormData({ ...formData, leave_type: value })}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -323,7 +346,7 @@ const LeaveManagement = () => {
                   id="start_date"
                   type="date"
                   value={formData.start_date}
-                  onChange={(e) => setFormData({...formData, start_date: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                   required
                 />
               </div>
@@ -333,7 +356,7 @@ const LeaveManagement = () => {
                   id="end_date"
                   type="date"
                   value={formData.end_date}
-                  onChange={(e) => setFormData({...formData, end_date: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                   required
                 />
               </div>
@@ -342,7 +365,7 @@ const LeaveManagement = () => {
                 <Textarea
                   id="reason"
                   value={formData.reason}
-                  onChange={(e) => setFormData({...formData, reason: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                   rows={3}
                   placeholder="Please provide a reason for your leave..."
                   required
@@ -410,6 +433,27 @@ const LeaveManagement = () => {
         </Card>
       </div>
 
+      {/* Pagination Controls */}
+      <div className="flex justify-between items-center">
+        <Button
+          disabled={page === 1}
+          onClick={() => setPage((prev) => prev - 1)}
+          variant="outline"
+        >
+          Previous
+        </Button>
+        <span>
+          Page {page} of {totalPages}
+        </span>
+        <Button
+          disabled={page === totalPages}
+          onClick={() => setPage((prev) => prev + 1)}
+          variant="outline"
+        >
+          Next
+        </Button>
+      </div>
+
       {/* Leave Requests Table */}
       <Card>
         <CardHeader>
@@ -465,15 +509,15 @@ const LeaveManagement = () => {
                     {canApproveLeaves && (
                       <TableCell>
                         <div>
-                          <div className="font-medium">{leave.user?.first_name} {leave.user?.last_name}</div>
+                          <div className="font-medium">
+                            {leave.user?.first_name} {leave.user?.last_name}
+                          </div>
                           <div className="text-sm text-gray-500">{leave.user?.email}</div>
                         </div>
                       </TableCell>
                     )}
                     <TableCell>
-                      <Badge className={getLeaveTypeColor(leave.leave_type)}>
-                        {leave.leave_type}
-                      </Badge>
+                      <Badge className={getLeaveTypeColor(leave.leave_type)}>{leave.leave_type}</Badge>
                     </TableCell>
                     <TableCell>{new Date(leave.start_date).toLocaleDateString()}</TableCell>
                     <TableCell>{new Date(leave.end_date).toLocaleDateString()}</TableCell>
@@ -483,11 +527,7 @@ const LeaveManagement = () => {
                     <TableCell>{getStatusBadge(leave.status)}</TableCell>
                     <TableCell>
                       <div className="flex space-x-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openViewDialog(leave)}
-                        >
+                        <Button size="sm" variant="outline" onClick={() => openViewDialog(leave)}>
                           <Eye className="h-4 w-4" />
                         </Button>
                         {canApproveLeaves && leave.status === 'Pending' && (
@@ -502,11 +542,7 @@ const LeaveManagement = () => {
                         )}
                         {isEmployee && leave.status === 'Pending' && (
                           <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openEditDialog(leave)}
-                            >
+                            <Button size="sm" variant="outline" onClick={() => openEditDialog(leave)}>
                               <Edit className="h-4 w-4" />
                             </Button>
                             <Button
@@ -539,9 +575,9 @@ const LeaveManagement = () => {
           <form onSubmit={handleUpdateLeave} className="space-y-4">
             <div>
               <Label htmlFor="edit_leave_type">Leave Type</Label>
-              <Select 
-                value={formData.leave_type} 
-                onValueChange={(value) => setFormData({...formData, leave_type: value})}
+              <Select
+                value={formData.leave_type}
+                onValueChange={(value) => setFormData({ ...formData, leave_type: value })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -561,7 +597,7 @@ const LeaveManagement = () => {
                 id="edit_start_date"
                 type="date"
                 value={formData.start_date}
-                onChange={(e) => setFormData({...formData, start_date: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                 required
               />
             </div>
@@ -571,7 +607,7 @@ const LeaveManagement = () => {
                 id="edit_end_date"
                 type="date"
                 value={formData.end_date}
-                onChange={(e) => setFormData({...formData, end_date: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                 required
               />
             </div>
@@ -580,7 +616,7 @@ const LeaveManagement = () => {
               <Textarea
                 id="edit_reason"
                 value={formData.reason}
-                onChange={(e) => setFormData({...formData, reason: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                 rows={3}
                 required
               />
@@ -606,7 +642,9 @@ const LeaveManagement = () => {
               {canApproveLeaves && (
                 <div>
                   <Label className="text-gray-600">Employee</Label>
-                  <p className="font-medium">{selectedLeave.user?.first_name} {selectedLeave.user?.last_name}</p>
+                  <p className="font-medium">
+                    {selectedLeave.user?.first_name} {selectedLeave.user?.last_name}
+                  </p>
                   <p className="text-sm text-gray-500">{selectedLeave.user?.email}</p>
                 </div>
               )}
@@ -645,7 +683,9 @@ const LeaveManagement = () => {
               {selectedLeave.reviewed_by && (
                 <div>
                   <Label className="text-gray-600">Reviewed By</Label>
-                  <p className="text-sm mt-1">{selectedLeave.reviewed_by.first_name} {selectedLeave.reviewed_by.last_name}</p>
+                  <p className="text-sm mt-1">
+                    {selectedLeave.reviewed_by.first_name} {selectedLeave.reviewed_by.last_name}
+                  </p>
                 </div>
               )}
             </div>
@@ -664,11 +704,22 @@ const LeaveManagement = () => {
             <DialogDescription>
               {selectedLeave && (
                 <div className="mt-4 space-y-2 text-sm">
-                  <p><strong>Employee:</strong> {selectedLeave.user?.first_name} {selectedLeave.user?.last_name}</p>
-                  <p><strong>Leave Type:</strong> {selectedLeave.leave_type}</p>
-                  <p><strong>Duration:</strong> {new Date(selectedLeave.start_date).toLocaleDateString()} to {new Date(selectedLeave.end_date).toLocaleDateString()}</p>
-                  <p><strong>Days:</strong> {calculateDays(selectedLeave.start_date, selectedLeave.end_date)} days</p>
-                  <p><strong>Reason:</strong> {selectedLeave.reason}</p>
+                  <p>
+                    <strong>Employee:</strong> {selectedLeave.user?.first_name} {selectedLeave.user?.last_name}
+                  </p>
+                  <p>
+                    <strong>Leave Type:</strong> {selectedLeave.leave_type}
+                  </p>
+                  <p>
+                    <strong>Duration:</strong> {new Date(selectedLeave.start_date).toLocaleDateString()} to{' '}
+                    {new Date(selectedLeave.end_date).toLocaleDateString()}
+                  </p>
+                  <p>
+                    <strong>Days:</strong> {calculateDays(selectedLeave.start_date, selectedLeave.end_date)} days
+                  </p>
+                  <p>
+                    <strong>Reason:</strong> {selectedLeave.reason}
+                  </p>
                 </div>
               )}
             </DialogDescription>
@@ -679,15 +730,15 @@ const LeaveManagement = () => {
               <Textarea
                 id="remarks"
                 value={reviewData.remarks}
-                onChange={(e) => setReviewData({...reviewData, remarks: e.target.value})}
+                onChange={(e) => setReviewData({ ...reviewData, remarks: e.target.value })}
                 rows={3}
                 placeholder="Add any comments or notes..."
               />
             </div>
             <div className="flex justify-end space-x-2">
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => {
                   setIsReviewDialogOpen(false);
                   setReviewData({ remarks: '' });
@@ -695,15 +746,15 @@ const LeaveManagement = () => {
               >
                 Cancel
               </Button>
-              <Button 
-                type="button" 
+              <Button
+                type="button"
                 variant="destructive"
                 onClick={() => selectedLeave && handleRejectLeave(selectedLeave.id)}
               >
                 <X className="h-4 w-4 mr-2" />
                 Reject
               </Button>
-              <Button 
+              <Button
                 type="button"
                 onClick={() => selectedLeave && handleApproveLeave(selectedLeave.id)}
                 className="bg-green-600 hover:bg-green-700"
@@ -720,4 +771,3 @@ const LeaveManagement = () => {
 };
 
 export default LeaveManagement;
-
