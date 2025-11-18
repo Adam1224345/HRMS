@@ -1,9 +1,10 @@
+# calendar.py - FULL FIXED FILE
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from src.models.user import db, User
 from src.models.leave import Leave
 from src.models.task import Task
-from datetime import datetime
+from datetime import datetime, timedelta  # <-- FIX 1: ADDED timedelta
 from sqlalchemy.orm import joinedload
 
 calendar_bp = Blueprint('calendar', __name__, url_prefix='/api')
@@ -136,6 +137,9 @@ def get_calendar_summary():
             return jsonify({'error': 'User not found'}), 404
 
         is_manager = any(role.name in ['Admin', 'HR'] for role in current_user.roles)
+        
+        # Determine current date based on server time (PKT) for comparison
+        today = datetime.now().date()  # <-- FIX 2: Use local 'now' instead of 'utcnow'
 
         # Leaves
         if is_manager:
@@ -149,7 +153,7 @@ def get_calendar_summary():
         if is_manager:
             total_tasks = Task.query.filter(Task.due_date.isnot(None)).count()
             overdue_tasks = Task.query.filter(
-                Task.due_date < datetime.utcnow().date(),
+                Task.due_date < today,
                 Task.status != 'Completed'
             ).count()
         else:
@@ -159,7 +163,7 @@ def get_calendar_summary():
             ).count()
             overdue_tasks = Task.query.filter(
                 Task.assigned_to_id == current_user_id,
-                Task.due_date < datetime.utcnow().date(),
+                Task.due_date < today,
                 Task.status != 'Completed'
             ).count()
 
