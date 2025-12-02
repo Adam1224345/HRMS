@@ -13,7 +13,11 @@ from flask import Flask
 
 def create_seeder_app():
     app = Flask(__name__)
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(PROJECT_ROOT, 'database', 'app.db')}"
+    app.config['SQLALCHEMY_DATABASE_URI'] = (
+    "postgresql+psycopg2://neondb_owner:npg_giUZDNp0W1wb@"
+    "ep-square-recipe-a1w5e43j.ap-southeast-1.aws.neon.tech/neondb"
+    "?sslmode=require&channel_binding=require"
+)
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     db.init_app(app)
     bcrypt.init_app(app)

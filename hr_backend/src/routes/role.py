@@ -227,3 +227,25 @@ def delete_role(role_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+@role_bp.route('/permissions', methods=['GET'])
+@require_permission('permission_read')
+def get_permissions():
+    """
+    Get all available permissions
+    ---
+    tags:
+      - Roles
+    responses:
+      200:
+        description: List of permissions retrieved successfully
+      500:
+        description: Internal server error
+    """
+    try:
+        permissions = Permission.query.all()
+        return jsonify({
+            'permissions': [p.to_dict() for p in permissions]
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
