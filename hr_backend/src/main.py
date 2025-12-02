@@ -26,8 +26,8 @@ app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
 
 app.config['SQLALCHEMY_DATABASE_URI'] = (
-    "postgresql+psycopg2://neondb_owner:npg_giUZDNp0W1wb@"
-    "ep-square-recipe-a1w5e43j.ap-southeast-1.aws.neon.tech/neondb"
+    "postgresql://neondb_owner:npg_x8KPZuq3opyk@"
+    "ep-muddy-darkness-a16txpfz-pooler.ap-southeast-1.aws.neon.tech/neondb"
     "?sslmode=require&channel_binding=require"
 )
 
