@@ -91,9 +91,6 @@ app.register_blueprint(document_bp)
 if task_bp:
     app.register_blueprint(task_bp, url_prefix='/api')
 
-# -------------------- 8. Create tables --------------------
-with app.app_context():
-    db.create_all()
 
 # -------------------- 9. Serve frontend --------------------
 @app.route('/', defaults={'path': ''})
