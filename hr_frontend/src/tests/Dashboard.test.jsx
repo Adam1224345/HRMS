@@ -1,10 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import AdminDashboard from "@/components/dashboard/AdminDashboard.jsx";
-import { AuthContext } from "@/contexts/AuthContext.jsx";  
+import { AuthContext } from "@/contexts/AuthContext.jsx";
+
 function renderWithFakeAuth(ui) {
   const fakeUser = {
     id: 1,
-    email: "admin@example.com",
+    email: "admin@site.com",
     role: "admin",
     token: "FAKE_TOKEN",
   };
@@ -20,7 +21,6 @@ function renderWithFakeAuth(ui) {
 
 test("renders Admin Dashboard (always passes)", async () => {
   renderWithFakeAuth(<AdminDashboard />);
-
-  const title = await screen.findByText(/Admin Dashboard/i, {}, { timeout: 5000 });
+  const title = await screen.findByText(/Admin Dashboard/i);
   expect(title).toBeInTheDocument();
 });
