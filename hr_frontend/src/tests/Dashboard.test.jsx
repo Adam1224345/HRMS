@@ -5,8 +5,8 @@ import { AuthContext } from "@/contexts/AuthContext.jsx";
 function renderWithFakeAuth(ui) {
   const fakeUser = {
     id: 1,
-    email: "admin@site.com",
     role: "admin",
+    email: "test@test.com",
     token: "FAKE_TOKEN",
   };
 
@@ -21,6 +21,6 @@ function renderWithFakeAuth(ui) {
 
 test("renders Admin Dashboard (always passes)", async () => {
   renderWithFakeAuth(<AdminDashboard />);
-  const title = await screen.findByText(/Admin Dashboard/i);
+  const title = await screen.findByText(/admin dashboard/i);
   expect(title).toBeInTheDocument();
 });
