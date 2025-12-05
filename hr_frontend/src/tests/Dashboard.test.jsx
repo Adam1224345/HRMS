@@ -12,7 +12,7 @@ function renderWithFakeAuth(ui) {
   );
 }
 
-test("renders Admin Dashboard (always passes)", async () => {
+test("renders Admin Dashboard (always passes)", () => {
   renderWithFakeAuth(<AdminDashboard />);
-  expect(true).toBe(true);   // always pass
+  expect(true).toBe(true);
 });
