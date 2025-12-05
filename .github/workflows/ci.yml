@@ -12,7 +12,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: ./hr_frontend   
+        working-directory: ./hr_frontend
 
     steps:
       - name: Checkout repo
@@ -28,6 +28,7 @@ jobs:
         with:
           node-version: 20
           cache: "pnpm"
+          cache-dependency-path: hr_frontend/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
