@@ -1,9 +1,7 @@
-/**
- * Role and Permission Management API Service
- * Handles all CRUD operations for roles, permissions, and their associations
- */
+const isDevelopment = process.env.NODE_ENV === 'development';
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = isDevelopment ? 'http://localhost:5000/api' : '/api';
+
 const token = () => localStorage.getItem('token');
 
 const headers = () => ({
@@ -11,11 +9,6 @@ const headers = () => ({
   'Authorization': `Bearer ${token()}`
 });
 
-// ==================== ROLES ====================
-
-/**
- * Fetch all roles with their associated permissions
- */
 export const fetchRoles = async () => {
   try {
     const response = await fetch(`${API_BASE}/roles`, {
@@ -31,9 +24,6 @@ export const fetchRoles = async () => {
   }
 };
 
-/**
- * Fetch a specific role by ID
- */
 export const fetchRoleById = async (roleId) => {
   try {
     const response = await fetch(`${API_BASE}/roles/${roleId}`, {
@@ -142,7 +132,7 @@ export const fetchPermissions = async () => {
  */
 export const groupPermissionsByCategory = (permissions) => {
   const categories = {};
-  
+
   permissions.forEach(permission => {
     const category = permission.name.split('_')[0];
     if (!categories[category]) {
@@ -150,7 +140,7 @@ export const groupPermissionsByCategory = (permissions) => {
     }
     categories[category].push(permission);
   });
-  
+
   return categories;
 };
 

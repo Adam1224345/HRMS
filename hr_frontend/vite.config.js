@@ -3,7 +3,6 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -11,7 +10,14 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+
   build: {
-    chunkSizeWarningLimit: 3024, 
+    chunkSizeWarningLimit: 3024,
+  },
+
+  test: {
+    globals: true,
+    environment: "jsdom",   
+    setupFiles: "src/tests/setup.js",
   },
 })

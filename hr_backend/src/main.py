@@ -25,14 +25,15 @@ app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'sta
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 app.config['JWT_SECRET_KEY'] = 'jwt-secret-string-change-in-production'
 
+# --- DATABASE CONFIGURATION (NEON POSTGRESQL) ---
 app.config['SQLALCHEMY_DATABASE_URI'] = (
-    "postgresql+psycopg2://neondb_owner:npg_giUZDNp0W1wb@"
-    "ep-square-recipe-a1w5e43j.ap-southeast-1.aws.neon.tech/neondb"
+    "postgresql://neondb_owner:npg_x8KPZuq3opyk@"
+    "ep-muddy-darkness-a16txpfz-pooler.ap-southeast-1.aws.neon.tech/neondb"
     "?sslmode=require&channel_binding=require"
 )
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- GMAIL CONFIGURATION (SETTINGS ONLY) ---
-
+# --- GMAIL CONFIGURATION ---
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
@@ -91,10 +92,6 @@ app.register_blueprint(document_bp)
 if task_bp:
     app.register_blueprint(task_bp, url_prefix='/api')
 
-# -------------------- 8. Create tables --------------------
-with app.app_context():
-    db.create_all()
-
 # -------------------- 9. Serve frontend --------------------
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -109,6 +106,6 @@ def serve(path):
 # -------------------- 10. Run Server --------------------
 if __name__ == '__main__':
     print("\nHRMS Backend Starting...")
+    print("Database: NEON DB (PostgreSQL)")
     print("Gmail Config: LOADED")
-    print("Notifications: HANDLED BY src/utils/notifications.py")
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)

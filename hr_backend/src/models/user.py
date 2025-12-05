@@ -1,3 +1,4 @@
+# src/models/user.py
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from flask_bcrypt import Bcrypt
@@ -5,22 +6,22 @@ from flask_bcrypt import Bcrypt
 db = SQLAlchemy()
 bcrypt = Bcrypt()
 
-# FIXED: Now points to "users" table
+# Association Table for User <-> Role
 user_roles = db.Table('user_roles',
-    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),  # ← changed from 'user.id'
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
     db.Column('role_id', db.Integer, db.ForeignKey('role.id'), primary_key=True),
     db.Column('created_at', db.DateTime, default=datetime.utcnow)
 )
 
+# Association Table for Role <-> Permission
 role_permissions = db.Table('role_permissions',
     db.Column('role_id', db.Integer, db.ForeignKey('role.id'), primary_key=True),
     db.Column('permission_id', db.Integer, db.ForeignKey('permission.id'), primary_key=True),
     db.Column('created_at', db.DateTime, default=datetime.utcnow)
 )
 
-# FIXED: Added __tablename__ = "users"
 class User(db.Model):
-    __tablename__ = "users"   # ← THIS IS THE KEY FIX
+    __tablename__ = 'users'  # Explicitly set table name to 'users' to avoid reserved word conflicts
 
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -32,6 +33,7 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Relationship to Role
     roles = db.relationship('Role', secondary=user_roles, lazy='subquery',
                            backref=db.backref('users', lazy=True))
 
@@ -74,11 +76,13 @@ class User(db.Model):
             user_dict['permissions'] = self.get_permissions()
         return user_dict
 
-# Rest unchanged
 class Role(db.Model):
+    # Default tablename is 'role'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), unique=True, nullable=False)
     description = db.Column(db.Text, nullable=True)
+    
+    # Relationship to Permission
     permissions = db.relationship('Permission', secondary=role_permissions, lazy='subquery',
                                  backref=db.backref('roles', lazy=True))
 
@@ -92,6 +96,7 @@ class Role(db.Model):
         return role_dict
 
 class Permission(db.Model):
+    # Default tablename is 'permission'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), unique=True, nullable=False)
     description = db.Column(db.Text, nullable=True)
