@@ -1,62 +1,88 @@
-import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Eye, EyeOff, UserPlus, Building2, ArrowLeft } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import React, { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Eye, EyeOff, UserPlus, Building2, ArrowLeft } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext";
 
-const registerSchema = z.object({
-  username: z.string().min(3, 'Username must be at least 3 characters'),
-  email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-  confirmPassword: z.string(),
-  first_name: z.string().min(1, 'First name is required'),
-  last_name: z.string().min(1, 'Last name is required')
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"]
-});
+// -------------------------
+// UPDATED PASSWORD SCHEMA
+// -------------------------
+const registerSchema = z
+  .object({
+    username: z.string().min(3, "Username must be at least 3 characters"),
+    email: z.string().email("Please enter a valid email address"),
+
+    // 🔥 FIXED — MATCHES BACKEND VALIDATION
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+      .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+      .regex(/[0-9]/, "Password must contain at least one number")
+      .regex(
+        /[!@#$%^&*()_+\-=\[\]{};:"\\|,.<>\/?~`]/,
+        "Password must contain at least one special character"
+      ),
+
+    confirmPassword: z.string(),
+
+    first_name: z.string().min(1, "First name is required"),
+    last_name: z.string().min(1, "Last name is required"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  });
 
 const RegisterPage = ({ onNavigate }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const { register: registerUser } = useAuth();
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-    reset
+    reset,
   } = useForm({
-    resolver: zodResolver(registerSchema)
+    resolver: zodResolver(registerSchema),
   });
 
   const onSubmit = async (data) => {
     setIsLoading(true);
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
 
     const { confirmPassword, ...userData } = data;
     const result = await registerUser(userData);
-    
+
     if (result.success) {
-      setSuccess('Registration successful! You can now sign in with your credentials.');
+      setSuccess(
+        "Registration successful! You can now sign in with your credentials."
+      );
       reset();
       setTimeout(() => {
-        onNavigate('login');
+        onNavigate("login");
       }, 2000);
     } else {
       setError(result.error);
     }
-    
+
     setIsLoading(false);
   };
 
@@ -69,7 +95,9 @@ const RegisterPage = ({ onNavigate }) => {
               <Building2 className="h-8 w-8 text-white" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">HR Management System</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            HR Management System
+          </h1>
           <p className="text-gray-600 mt-2">Create your account</p>
         </div>
 
@@ -90,7 +118,9 @@ const RegisterPage = ({ onNavigate }) => {
 
               {success && (
                 <Alert className="border-green-200 bg-green-50">
-                  <AlertDescription className="text-green-800">{success}</AlertDescription>
+                  <AlertDescription className="text-green-800">
+                    {success}
+                  </AlertDescription>
                 </Alert>
               )}
 
@@ -101,11 +131,13 @@ const RegisterPage = ({ onNavigate }) => {
                     id="first_name"
                     type="text"
                     placeholder="John"
-                    {...register('first_name')}
-                    className={errors.first_name ? 'border-red-500' : ''}
+                    {...register("first_name")}
+                    className={errors.first_name ? "border-red-500" : ""}
                   />
                   {errors.first_name && (
-                    <p className="text-sm text-red-500">{errors.first_name.message}</p>
+                    <p className="text-sm text-red-500">
+                      {errors.first_name.message}
+                    </p>
                   )}
                 </div>
 
@@ -115,11 +147,13 @@ const RegisterPage = ({ onNavigate }) => {
                     id="last_name"
                     type="text"
                     placeholder="Doe"
-                    {...register('last_name')}
-                    className={errors.last_name ? 'border-red-500' : ''}
+                    {...register("last_name")}
+                    className={errors.last_name ? "border-red-500" : ""}
                   />
                   {errors.last_name && (
-                    <p className="text-sm text-red-500">{errors.last_name.message}</p>
+                    <p className="text-sm text-red-500">
+                      {errors.last_name.message}
+                    </p>
                   )}
                 </div>
               </div>
@@ -130,11 +164,13 @@ const RegisterPage = ({ onNavigate }) => {
                   id="username"
                   type="text"
                   placeholder="johndoe"
-                  {...register('username')}
-                  className={errors.username ? 'border-red-500' : ''}
+                  {...register("username")}
+                  className={errors.username ? "border-red-500" : ""}
                 />
                 {errors.username && (
-                  <p className="text-sm text-red-500">{errors.username.message}</p>
+                  <p className="text-sm text-red-500">
+                    {errors.username.message}
+                  </p>
                 )}
               </div>
 
@@ -144,65 +180,85 @@ const RegisterPage = ({ onNavigate }) => {
                   id="email"
                   type="email"
                   placeholder="john.doe@company.com"
-                  {...register('email')}
-                  className={errors.email ? 'border-red-500' : ''}
+                  {...register("email")}
+                  className={errors.email ? "border-red-500" : ""}
                 />
                 {errors.email && (
-                  <p className="text-sm text-red-500">{errors.email.message}</p>
+                  <p className="text-sm text-red-500">
+                    {errors.email.message}
+                  </p>
                 )}
               </div>
 
+              {/* PASSWORD */}
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
                   <Input
                     id="password"
-                    type={showPassword ? 'text' : 'password'}
+                    type={showPassword ? "text" : "password"}
                     placeholder="Enter your password"
-                    {...register('password')}
-                    className={errors.password ? 'border-red-500 pr-10' : 'pr-10'}
+                    {...register("password")}
+                    className={
+                      errors.password ? "border-red-500 pr-10" : "pr-10"
+                    }
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
                   >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
                 {errors.password && (
-                  <p className="text-sm text-red-500">{errors.password.message}</p>
+                  <p className="text-sm text-red-500">
+                    {errors.password.message}
+                  </p>
                 )}
               </div>
 
+              {/* CONFIRM PASSWORD */}
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
                 <div className="relative">
                   <Input
                     id="confirmPassword"
-                    type={showConfirmPassword ? 'text' : 'password'}
+                    type={showConfirmPassword ? "text" : "password"}
                     placeholder="Confirm your password"
-                    {...register('confirmPassword')}
-                    className={errors.confirmPassword ? 'border-red-500 pr-10' : 'pr-10'}
+                    {...register("confirmPassword")}
+                    className={
+                      errors.confirmPassword
+                        ? "border-red-500 pr-10"
+                        : "pr-10"
+                    }
                   />
                   <button
                     type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    onClick={() =>
+                      setShowConfirmPassword(!showConfirmPassword)
+                    }
                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
                   >
-                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
                 {errors.confirmPassword && (
-                  <p className="text-sm text-red-500">{errors.confirmPassword.message}</p>
+                  <p className="text-sm text-red-500">
+                    {errors.confirmPassword.message}
+                  </p>
                 )}
               </div>
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isLoading}
-              >
+              <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? (
                   <div className="flex items-center">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
@@ -219,7 +275,7 @@ const RegisterPage = ({ onNavigate }) => {
 
             <div className="mt-6 text-center">
               <button
-                onClick={() => onNavigate('login')}
+                onClick={() => onNavigate("login")}
                 className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 hover:underline"
               >
                 <ArrowLeft className="h-4 w-4 mr-1" />

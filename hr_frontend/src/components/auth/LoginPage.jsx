@@ -11,7 +11,7 @@ import { Eye, EyeOff, LogIn, Building2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const loginSchema = z.object({
-  username: z.string().min(1, 'Username is required'),
+  username: z.string().min(1, 'Username or Email is required'),
   password: z.string().min(1, 'Password is required')
 });
 
@@ -34,11 +34,11 @@ const LoginPage = ({ onNavigate }) => {
     setError('');
 
     const result = await login(data);
-    
+
     if (!result.success) {
       setError(result.error);
     }
-    
+
     setIsLoading(false);
   };
 
@@ -144,17 +144,6 @@ const LoginPage = ({ onNavigate }) => {
                 >
                   Sign up
                 </button>
-              </div>
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="text-xs text-gray-500 text-center">
-                <p className="mb-2">Demo Accounts:</p>
-                <div className="space-y-1">
-                  <p><strong>Admin:</strong> admin / admin123</p>
-                  <p><strong>HR:</strong> hr_manager / hr123</p>
-                  <p><strong>Employee:</strong> john_doe / employee123</p>
-                </div>
               </div>
             </div>
           </CardContent>

@@ -2,6 +2,8 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from flask_bcrypt import Bcrypt
+from werkzeug.security import generate_password_hash, check_password_hash  # NEW
+import secrets  # NEW
 
 db = SQLAlchemy()
 bcrypt = Bcrypt()
@@ -21,7 +23,7 @@ role_permissions = db.Table('role_permissions',
 )
 
 class User(db.Model):
-    __tablename__ = 'users'  # Explicitly set table name to 'users' to avoid reserved word conflicts
+    __tablename__ = 'users'
 
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -33,6 +35,10 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # NEW — Refresh Token Fields (Required for JWT Security Compliance)
+    refresh_token_hash = db.Column(db.String(255), nullable=True)
+    refresh_token_expiry = db.Column(db.DateTime, nullable=True)
+
     # Relationship to Role
     roles = db.relationship('Role', secondary=user_roles, lazy='subquery',
                            backref=db.backref('users', lazy=True))
@@ -40,12 +46,30 @@ class User(db.Model):
     def __repr__(self):
         return f'<User {self.username}>'
 
+    # Password hashing
     def set_password(self, password):
         self.password = bcrypt.generate_password_hash(password).decode('utf-8')
 
     def check_password(self, password):
         return bcrypt.check_password_hash(self.password, password)
 
+    # NEW — Secure Refresh Token Methods
+    def set_refresh_token(self, token):
+        """Stores a hashed refresh token for the user."""
+        self.refresh_token_hash = generate_password_hash(token)
+
+    def check_refresh_token(self, token):
+        """Validates refresh token hash securely."""
+        if not self.refresh_token_hash:
+            return False
+        return check_password_hash(self.refresh_token_hash, token)
+
+    def clear_refresh_token(self):
+        """Logout / revoke tokens"""
+        self.refresh_token_hash = None
+        self.refresh_token_expiry = None
+
+    # Permission Helper Methods
     def has_permission(self, permission_name):
         for role in self.roles:
             for permission in role.permissions:
@@ -54,12 +78,9 @@ class User(db.Model):
         return False
 
     def get_permissions(self):
-        permissions = set()
-        for role in self.roles:
-            for permission in role.permissions:
-                permissions.add(permission.name)
-        return list(permissions)
+        return list({permission.name for role in self.roles for permission in role.permissions})
 
+    # Serialize user (SECURE: excludes password & tokens)
     def to_dict(self, include_roles=False):
         user_dict = {
             'id': self.id,
@@ -71,18 +92,19 @@ class User(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
+
         if include_roles:
             user_dict['roles'] = [role.to_dict() for role in self.roles]
             user_dict['permissions'] = self.get_permissions()
+
         return user_dict
 
+
 class Role(db.Model):
-    # Default tablename is 'role'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), unique=True, nullable=False)
     description = db.Column(db.Text, nullable=True)
     
-    # Relationship to Permission
     permissions = db.relationship('Permission', secondary=role_permissions, lazy='subquery',
                                  backref=db.backref('roles', lazy=True))
 
@@ -95,8 +117,8 @@ class Role(db.Model):
             role_dict['permissions'] = [p.to_dict() for p in self.permissions]
         return role_dict
 
+
 class Permission(db.Model):
-    # Default tablename is 'permission'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), unique=True, nullable=False)
     description = db.Column(db.Text, nullable=True)
