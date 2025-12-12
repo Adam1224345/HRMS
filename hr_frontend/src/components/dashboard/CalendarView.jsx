@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next'; 
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -41,6 +42,7 @@ if (!axios.defaults.baseURL) {
 }
 
 const CalendarView = () => {
+  const { t } = useTranslation(); // <--- ADDED
   const { user } = useAuth();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -116,7 +118,7 @@ const CalendarView = () => {
 
     return (
       <Badge className={statusColors[status] || 'bg-gray-100 text-gray-800 border border-gray-200'}>
-        {status}
+        {t(`status_${status.toLowerCase().replace(' ', '_')}`)} {/* <-- Translated */}
       </Badge>
     );
   };
@@ -130,7 +132,7 @@ const CalendarView = () => {
 
     return (
       <Badge className={priorityColors[priority] || 'bg-gray-100 text-gray-800 border border-gray-200'}>
-        {priority}
+        {t(`priority_${priority.toLowerCase()}`)} {/* <-- Translated */}
       </Badge>
     );
   };
@@ -150,7 +152,7 @@ const CalendarView = () => {
       dateOptions.minute = '2-digit';
     }
 
-    return new Date(date).toLocaleString('en-US', dateOptions);
+    return new Date(date).toLocaleString(t('locale') || 'en-US', dateOptions); // <-- Translated locale
   };
 
   const { title, start, end, type, status, description, user: eventUser, priority } = selectedEvent || {};
@@ -163,9 +165,9 @@ const CalendarView = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900">Calendar View</h2>
+          <h2 className="text-3xl font-bold text-gray-900">{t('calendar_view_title')}</h2> {/* <-- Translated */}
           <p className="text-gray-600 mt-2">
-            View all company events, leave requests, and task deadlines.
+            {t('calendar_view_desc')} {/* <-- Translated */}
           </p>
         </div>
         <Button onClick={fetchCalendarEvents} disabled={loading}>
@@ -174,27 +176,27 @@ const CalendarView = () => {
           ) : (
             <Calendar className="h-4 w-4 mr-2" />
           )}
-          {loading ? 'Refreshing...' : 'Refresh'}
+          {loading ? t('refreshing') : t('refresh')} {/* <-- Translated */}
         </Button>
       </div>
 
       <Card>
         <CardHeader className="order-first">
-          <CardTitle>Monthly Calendar</CardTitle>
+          <CardTitle>{t('monthly_calendar')}</CardTitle> {/* <-- Translated */}
           {/* Enhanced Legend on Top */}
           <CardDescription>
             <div className="flex flex-wrap gap-4 mt-2 font-medium">
               <div className="flex items-center gap-2 text-sm text-gray-700">
                 <div className="w-3 h-3 rounded-full border border-emerald-300" style={{ backgroundColor: LEAVE_COLOR.bg }}></div>
-                <span>Leave Requests</span>
+                <span>{t('legend_leave_requests')}</span> {/* <-- Translated */}
               </div>
               <div className="flex items-center gap-2 text-sm text-gray-700">
                 <div className="w-3 h-3 rounded-full border border-blue-300" style={{ backgroundColor: TASK_COLOR.bg }}></div>
-                <span>Task Deadlines</span>
+                <span>{t('legend_task_deadlines')}</span> {/* <-- Translated */}
               </div>
               <div className="flex items-center gap-2 text-sm text-gray-700">
                 <div className="w-3 h-3 rounded-full border border-orange-300" style={{ backgroundColor: HOLIDAY_COLOR.bg }}></div>
-                <span>Holidays/Company Events</span>
+                <span>{t('legend_holidays')}</span> {/* <-- Translated */}
               </div>
             </div>
           </CardDescription>
@@ -203,7 +205,7 @@ const CalendarView = () => {
           {loading ? (
             <div className="flex justify-center items-center h-96">
               <Loader2 className="h-8 w-8 text-gray-500 animate-spin" />
-              <p className="text-gray-600 ml-3">Loading calendar events...</p>
+              <p className="text-gray-600 ml-3">{t('loading_calendar_events')}</p> {/* <-- Translated */}
             </div>
           ) : (
             <div className="calendar-container">
@@ -229,6 +231,8 @@ const CalendarView = () => {
                   minute: '2-digit',
                   meridiem: false,
                 }}
+                // Optionally translate built-in FullCalendar strings via options like buttonText
+                // buttonText: { today: t('today'), month: t('month'), week: t('week'), day: t('day') }
               />
             </div>
           )}
@@ -250,7 +254,7 @@ const CalendarView = () => {
               {title}
             </DialogTitle>
             <DialogDescription className="text-gray-500">
-              {isHoliday ? 'Holiday/Company Event Details' : isLeave ? 'Leave Request Details' : 'Task/Project Details'}
+              {isHoliday ? t('holiday_event_details') : isLeave ? t('leave_request_details') : t('task_project_details')} {/* <-- Translated */}
             </DialogDescription>
           </DialogHeader>
 
@@ -259,14 +263,14 @@ const CalendarView = () => {
               {/* Type and Status Row */}
               <div className={`grid grid-cols-2 gap-4 ${!isHoliday ? 'border-b pb-4' : ''}`}>
                 <div>
-                  <label className="text-xs font-medium text-gray-500 block uppercase tracking-wider">Type</label>
+                  <label className="text-xs font-medium text-gray-500 block uppercase tracking-wider">{t('type')}</label> {/* <-- Translated */}
                   <p className="text-base font-medium text-gray-900 capitalize mt-1">
-                    {type}
+                    {t(`event_type_${type}`)} {/* <-- Translated type */}
                   </p>
                 </div>
                 {!isHoliday && (
                   <div>
-                    <label className="text-xs font-medium text-gray-500 block uppercase tracking-wider">Status</label>
+                    <label className="text-xs font-medium text-gray-500 block uppercase tracking-wider">{t('status')}</label> {/* <-- Translated */}
                     <div className="mt-1">{getStatusBadge(status)}</div>
                   </div>
                 )}
@@ -277,7 +281,7 @@ const CalendarView = () => {
                 <div>
                   <label className="text-xs font-medium text-gray-500 block uppercase tracking-wider flex items-center gap-1">
                     <Clock className="h-3 w-3" />
-                    Start Date
+                    {t('start_date')} {/* <-- Translated */}
                   </label>
                   <p className="text-sm text-gray-900 mt-1 font-mono bg-gray-50 p-1 rounded">
                     {formatDate(start, !isAllDayEvent)}
@@ -286,7 +290,7 @@ const CalendarView = () => {
                 <div>
                   <label className="text-xs font-medium text-gray-500 block uppercase tracking-wider flex items-center gap-1">
                     <Clock className="h-3 w-3" />
-                    End Date
+                    {t('end_date')} {/* <-- Translated */}
                   </label>
                   <p className="text-sm text-gray-900 mt-1 font-mono bg-gray-50 p-1 rounded">
                     {formatDate(end, !isAllDayEvent)}
@@ -301,7 +305,7 @@ const CalendarView = () => {
                     <div>
                       <label className="text-xs font-medium text-gray-500 block uppercase tracking-wider flex items-center gap-1">
                         <User className="h-3 w-3" />
-                        {isLeave ? 'Employee' : 'Assigned To'}
+                        {isLeave ? t('employee') : t('assigned_to')} {/* <-- Translated */}
                       </label>
                       <p className="text-sm text-gray-900 mt-1 font-medium">
                         {eventUser.first_name} {eventUser.last_name}
@@ -314,7 +318,7 @@ const CalendarView = () => {
 
                   {priority && (
                     <div>
-                      <label className="text-xs font-medium text-gray-500 block uppercase tracking-wider">Priority</label>
+                      <label className="text-xs font-medium text-gray-500 block uppercase tracking-wider">{t('priority')}</label> {/* <-- Translated */}
                       <div className="mt-1">{getPriorityBadge(priority)}</div>
                     </div>
                   )}
@@ -324,7 +328,7 @@ const CalendarView = () => {
               {/* Description (Full Width) */}
               {description && (
                 <div>
-                  <label className="text-xs font-medium text-gray-500 block uppercase tracking-wider">Description / Reason</label>
+                  <label className="text-xs font-medium text-gray-500 block uppercase tracking-wider">{t('description_reason')}</label> {/* <-- Translated */}
                   <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
                     <p className="text-sm text-gray-800 whitespace-pre-wrap">
                       {description}

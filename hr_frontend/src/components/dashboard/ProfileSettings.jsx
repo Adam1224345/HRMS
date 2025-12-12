@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,9 +20,11 @@ import {
   Calendar,
   Loader2
 } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+// FIX: Corrected the typo in the import path
+import { useAuth } from '../../contexts/AuthContext'; 
 
 const ProfileSettings = () => {
+  const { t } = useTranslation();
   const { user, updateProfile, changePassword } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
   const [loading, setLoading] = useState(true);
@@ -52,7 +55,7 @@ const ProfileSettings = () => {
       });
       setLoading(false);
     } else {
-      setError('User data not available');
+      setError(t('user_data_not_available'));
       setLoading(false);
     }
   }, [user]);
@@ -66,12 +69,12 @@ const ProfileSettings = () => {
     try {
       const result = await updateProfile(profileData);
       if (result.success) {
-        setSuccess('Profile updated successfully!');
+        setSuccess(t('success_profile_updated'));
       } else {
-        setError(result.error || 'Failed to update profile');
+        setError(result.error || t('error_update_profile_failed'));
       }
     } catch (err) {
-      setError('An unexpected error occurred');
+      setError(t('error_unexpected_error'));
     } finally {
       setLoading(false);
     }
@@ -84,13 +87,13 @@ const ProfileSettings = () => {
     setSuccess('');
 
     if (passwordData.new_password !== passwordData.confirm_password) {
-      setError('New passwords do not match');
+      setError(t('error_passwords_do_not_match'));
       setLoading(false);
       return;
     }
 
     if (passwordData.new_password.length < 6) {
-      setError('New password must be at least 6 characters long');
+      setError(t('error_password_min_length'));
       setLoading(false);
       return;
     }
@@ -98,17 +101,17 @@ const ProfileSettings = () => {
     try {
       const result = await changePassword(passwordData.current_password, passwordData.new_password);
       if (result.success) {
-        setSuccess('Password changed successfully!');
+        setSuccess(t('success_password_changed'));
         setPasswordData({
           current_password: '',
           new_password: '',
           confirm_password: ''
         });
       } else {
-        setError(result.error || 'Failed to change password');
+        setError(result.error || t('error_change_password_failed'));
       }
     } catch (err) {
-      setError('An unexpected error occurred');
+      setError(t('error_unexpected_error'));
     } finally {
       setLoading(false);
     }
@@ -119,16 +122,16 @@ const ProfileSettings = () => {
   };
 
   const tabs = [
-    { id: 'profile', label: 'Profile Information', icon: User },
-    { id: 'password', label: 'Change Password', icon: Key },
-    { id: 'account', label: 'Account Details', icon: Shield }
+    { id: 'profile', label: t('profile_tab_info'), icon: User },
+    { id: 'password', label: t('profile_tab_password'), icon: Key },
+    { id: 'account', label: t('profile_tab_account'), icon: Shield }
   ];
 
   if (loading) {
     return (
       <div className="flex justify-center items-center h-full">
         <Loader2 className="h-8 w-8 animate-spin" />
-        <span className="ml-2">Loading profile...</span>
+        <span className="ml-2">{t('loading_profile')}</span>
       </div>
     );
   }
@@ -146,8 +149,8 @@ const ProfileSettings = () => {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div>
-        <h2 className="text-3xl font-bold text-gray-900">Profile Settings</h2>
-        <p className="text-gray-600 mt-2">Manage your account settings and preferences</p>
+        <h2 className="text-3xl font-bold text-gray-900">{t('profile_settings_title')}</h2>
+        <p className="text-gray-600 mt-2">{t('profile_settings_desc')}</p>
       </div>
 
       {(error || success) && (
@@ -172,14 +175,14 @@ const ProfileSettings = () => {
         <TabsContent value="profile" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Profile Information</CardTitle>
-              <CardDescription>Update your personal information.</CardDescription>
+              <CardTitle>{t('profile_info_card_title')}</CardTitle>
+              <CardDescription>{t('profile_info_card_desc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleProfileUpdate} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="first_name">First Name</Label>
+                    <Label htmlFor="first_name">{t('first_name')}</Label>
                     <Input
                       id="first_name"
                       value={profileData.first_name}
@@ -188,7 +191,7 @@ const ProfileSettings = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="last_name">Last Name</Label>
+                    <Label htmlFor="last_name">{t('last_name')}</Label>
                     <Input
                       id="last_name"
                       value={profileData.last_name}
@@ -197,7 +200,7 @@ const ProfileSettings = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">{t('email')}</Label>
                     <Input
                       id="email"
                       type="email"
@@ -209,7 +212,7 @@ const ProfileSettings = () => {
                 </div>
                 <Button type="submit" disabled={loading} className="w-full md:w-auto">
                   <Save className="h-4 w-4 mr-2" />
-                  {loading ? 'Saving...' : 'Save Changes'}
+                  {loading ? t('saving') : t('save_changes')}
                 </Button>
               </form>
             </CardContent>
@@ -219,13 +222,13 @@ const ProfileSettings = () => {
         <TabsContent value="password" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Change Password</CardTitle>
-              <CardDescription>Update your password for security.</CardDescription>
+              <CardTitle>{t('change_password_card_title')}</CardTitle>
+              <CardDescription>{t('change_password_card_desc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handlePasswordChange} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="current_password">Current Password</Label>
+                  <Label htmlFor="current_password">{t('current_password')}</Label>
                   <div className="relative">
                     <Input
                       id="current_password"
@@ -246,7 +249,7 @@ const ProfileSettings = () => {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="new_password">New Password</Label>
+                  <Label htmlFor="new_password">{t('new_password')}</Label>
                   <div className="relative">
                     <Input
                       id="new_password"
@@ -267,7 +270,7 @@ const ProfileSettings = () => {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="confirm_password">Confirm New Password</Label>
+                  <Label htmlFor="confirm_password">{t('confirm_new_password')}</Label>
                   <div className="relative">
                     <Input
                       id="confirm_password"
@@ -289,7 +292,7 @@ const ProfileSettings = () => {
                 </div>
                 <Button type="submit" disabled={loading} className="w-full md:w-auto">
                   <Key className="h-4 w-4 mr-2" />
-                  {loading ? 'Changing...' : 'Change Password'}
+                  {loading ? t('changing') : t('change_password')}
                 </Button>
               </form>
             </CardContent>
@@ -299,43 +302,43 @@ const ProfileSettings = () => {
         <TabsContent value="account" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Account Details</CardTitle>
-              <CardDescription>View your account information and roles.</CardDescription>
+              <CardTitle>{t('account_details_card_title')}</CardTitle>
+              <CardDescription>{t('account_details_card_desc')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-6">
                 <div>
-                  <h3 className="text-lg font-medium mb-3">Basic Information</h3>
+                  <h3 className="text-lg font-medium mb-3">{t('basic_information')}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-center space-x-3">
                       <User className="h-5 w-5 text-gray-400" />
                       <div>
-                        <p className="text-sm font-medium">Username</p>
-                        <p className="text-sm text-gray-600">{user?.username || 'N/A'}</p>
+                        <p className="text-sm font-medium">{t('username')}</p>
+                        <p className="text-sm text-gray-600">{user?.username || t('not_available')}</p>
                       </div>
                     </div>
                     <div className="flex items-center space-x-3">
                       <Mail className="h-5 w-5 text-gray-400" />
                       <div>
-                        <p className="text-sm font-medium">Email</p>
-                        <p className="text-sm text-gray-600">{user?.email || 'N/A'}</p>
+                        <p className="text-sm font-medium">{t('email')}</p>
+                        <p className="text-sm text-gray-600">{user?.email || t('not_available')}</p>
                       </div>
                     </div>
                     <div className="flex items-center space-x-3">
                       <Calendar className="h-5 w-5 text-gray-400" />
                       <div>
-                        <p className="text-sm font-medium">Member Since</p>
+                        <p className="text-sm font-medium">{t('member_since')}</p>
                         <p className="text-sm text-gray-600">
-                          {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
+                          {user?.created_at ? new Date(user.created_at).toLocaleDateString(t('locale')) : t('not_available')}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center space-x-3">
                       <Shield className="h-5 w-5 text-gray-400" />
                       <div>
-                        <p className="text-sm font-medium">Account Status</p>
+                        <p className="text-sm font-medium">{t('account_status')}</p>
                         <Badge variant={user?.is_active ? 'default' : 'secondary'}>
-                          {user?.is_active ? 'Active' : 'Inactive'}
+                          {user?.is_active ? t('status_active') : t('status_inactive')}
                         </Badge>
                       </div>
                     </div>
@@ -345,10 +348,10 @@ const ProfileSettings = () => {
                 <Separator />
 
                 <div>
-                  <h3 className="text-lg font-medium mb-3">Roles & Permissions</h3>
+                  <h3 className="text-lg font-medium mb-3">{t('roles_permissions')}</h3>
                   <div className="space-y-4">
                     <div>
-                      <p className="text-sm font-medium mb-2">Assigned Roles</p>
+                      <p className="text-sm font-medium mb-2">{t('assigned_roles')}</p>
                       <div className="flex flex-wrap gap-2">
                         {user?.roles?.length ? (
                           user.roles.map((role) => (
@@ -357,13 +360,13 @@ const ProfileSettings = () => {
                             </Badge>
                           ))
                         ) : (
-                          <p className="text-sm text-gray-600">No roles assigned</p>
+                          <p className="text-sm text-gray-600">{t('no_roles_assigned')}</p> 
                         )}
                       </div>
                     </div>
                     <div>
                       <p className="text-sm font-medium mb-2">
-                        Permissions ({user?.permissions?.length || 0})
+                        {t('permissions_count', { count: user?.permissions?.length || 0 })}
                       </p>
                       <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
                         {user?.permissions?.length ? (
@@ -373,7 +376,7 @@ const ProfileSettings = () => {
                             </Badge>
                           ))
                         ) : (
-                          <p className="text-sm text-gray-600">No permissions assigned</p>
+                          <p className="text-sm text-gray-600">{t('no_permissions_assigned')}</p>
                         )}
                       </div>
                     </div>

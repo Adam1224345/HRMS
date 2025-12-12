@@ -12,12 +12,32 @@ class Leave(db.Model):
     status = db.Column(db.String(50), default='Pending', nullable=False)
     remarks = db.Column(db.Text, nullable=True)
 
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    reviewed_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    # REAL APPLICATION FIX:
+    # When a user is deleted → keep record → user_id set to NULL
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('users.id', ondelete="SET NULL"),
+        nullable=True
+    )
 
-    # Relationships 
-    user = db.relationship('User', foreign_keys=[user_id], backref=db.backref('leave_requests', lazy='dynamic'))
-    reviewed_by = db.relationship('User', foreign_keys=[reviewed_by_id], backref=db.backref('reviewed_leaves', lazy='dynamic'))
+    reviewed_by_id = db.Column(
+        db.Integer,
+        db.ForeignKey('users.id', ondelete="SET NULL"),
+        nullable=True
+    )
+
+    # Relationships
+    user = db.relationship(
+        'User',
+        foreign_keys=[user_id],
+        backref=db.backref('leave_requests', lazy='dynamic', passive_deletes=True)
+    )
+
+    reviewed_by = db.relationship(
+        'User',
+        foreign_keys=[reviewed_by_id],
+        backref=db.backref('reviewed_leaves', lazy='dynamic', passive_deletes=True)
+    )
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -34,19 +54,25 @@ class Leave(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
 
-        
+            # USER WHO CREATED THE LEAVE
             'user': {
-                'id': self.user.id,
-                'username': self.user.username,
-                'first_name': self.user.first_name or '',
-                'last_name': self.user.last_name or '',
-                'full_name': f"{self.user.first_name or ''} {self.user.last_name or ''}".strip() or self.user.username
+                'id': self.user.id if self.user else None,
+                'username': self.user.username if self.user else "Deleted User",
+                'first_name': (self.user.first_name if self.user else '') or '',
+                'last_name': (self.user.last_name if self.user else '') or '',
+                'full_name': (
+                    f"{self.user.first_name or ''} {self.user.last_name or ''}".strip()
+                    if self.user else "Deleted User"
+                ),
             },
 
-            # WHO APPROVED/REJECTED
+            # ADMIN WHO REVIEWED
             'reviewed_by': {
                 'id': self.reviewed_by.id if self.reviewed_by else None,
                 'username': self.reviewed_by.username if self.reviewed_by else None,
-                'full_name': f"{(self.reviewed_by.first_name or '')} {(self.reviewed_by.last_name or '')}".strip() if self.reviewed_by else None
+                'full_name': (
+                    f"{(self.reviewed_by.first_name or '')} {(self.reviewed_by.last_name or '')}".strip()
+                    if self.reviewed_by else None
+                )
             } if self.reviewed_by else None
         }

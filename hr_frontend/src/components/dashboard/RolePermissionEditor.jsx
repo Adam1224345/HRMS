@@ -1,13 +1,3 @@
-/**
- * RolePermissionEditor Component
- * Comprehensive admin UI for managing roles and their permissions
- * Features:
- * - Create, read, update, delete roles
- * - Dynamic permission assignment via checkbox matrix
- * - Search and filter roles
- * - Permission categories with select/deselect all
- * - Responsive design with proper error handling
- */
 
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';

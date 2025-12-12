@@ -1,12 +1,4 @@
-/**
- * PermissionMatrix Component
- * Displays a dynamic checkbox matrix for assigning permissions to roles
- * Features:
- * - Organized by permission categories (user, role, permission, task, leave)
- * - Select/Deselect all within a category
- * - Visual feedback for selected permissions
- * - Responsive grid layout
- */
+
 
 import React, { useState, useEffect } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';

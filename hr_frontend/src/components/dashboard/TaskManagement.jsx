@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next'; 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,6 +45,7 @@ import axios from 'axios';
 import { useAuth } from '../../contexts/AuthContext';
 
 const TaskManagement = () => {
+  const { t } = useTranslation(); // <--- ADDED
   const { hasRole } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
@@ -69,7 +71,7 @@ const TaskManagement = () => {
   const canManageTasks = hasRole('Admin') || hasRole('HR');
 
   /* ------------------------------------------------------------------ */
-  /*  Data fetching                                                     */
+  /* Data fetching                                                     */
   /* ------------------------------------------------------------------ */
   useEffect(() => {
     fetchTasks();
@@ -81,7 +83,7 @@ const TaskManagement = () => {
       const { data } = await axios.get('/tasks');
       setTasks(data.tasks || []);
     } catch (e) {
-      setError('Failed to fetch tasks');
+      setError(t('error_fetch_tasks')); // <-- Translated
     } finally {
       setLoading(false);
     }
@@ -97,7 +99,7 @@ const TaskManagement = () => {
   };
 
   /* ------------------------------------------------------------------ */
-  /*  CRUD handlers                                                    */
+  /* CRUD handlers                                                    */
   /* ------------------------------------------------------------------ */
   const handleCreateTask = async (e) => {
     e.preventDefault();
@@ -107,10 +109,10 @@ const TaskManagement = () => {
       setIsCreateDialogOpen(false);
       resetForm();
       fetchTasks();
-      setSuccess('Task created successfully!');
+      setSuccess(t('success_task_created')); // <-- Translated
       setTimeout(() => setSuccess(''), 3000);
     } catch (e) {
-      setError(e.response?.data?.error || 'Failed to create task');
+      setError(e.response?.data?.error || t('error_create_task_failed')); // <-- Translated
     }
   };
 
@@ -122,23 +124,23 @@ const TaskManagement = () => {
       setIsEditDialogOpen(false);
       resetForm();
       fetchTasks();
-      setSuccess('Task updated successfully!');
+      setSuccess(t('success_task_updated')); // <-- Translated
       setTimeout(() => setSuccess(''), 3000);
     } catch (e) {
-      setError(e.response?.data?.error || 'Failed to update task');
+      setError(e.response?.data?.error || t('error_update_task_failed')); // <-- Translated
     }
   };
 
   const handleDeleteTask = async (taskId) => {
-    if (!window.confirm('Delete this task?')) return;
+    if (!window.confirm(t('confirm_delete_task'))) return; // <-- Translated
     setError(''); setSuccess('');
     try {
       await axios.delete(`/tasks/${taskId}`);
       fetchTasks();
-      setSuccess('Task deleted successfully!');
+      setSuccess(t('success_task_deleted')); // <-- Translated
       setTimeout(() => setSuccess(''), 3000);
     } catch (e) {
-      setError(e.response?.data?.error || 'Failed to delete task');
+      setError(e.response?.data?.error || t('error_delete_task_failed')); // <-- Translated
     }
   };
 
@@ -173,7 +175,7 @@ const TaskManagement = () => {
   };
 
   /* ------------------------------------------------------------------ */
-  /*  Filtering & helpers                                              */
+  /* Filtering & helpers                                              */
   /* ------------------------------------------------------------------ */
   const filteredTasks = tasks.filter((task) => {
     const matchesSearch =
@@ -195,7 +197,7 @@ const TaskManagement = () => {
     return (
       <Badge className={`${cls} flex items-center gap-1`}>
         <Icon className="h-3 w-3" />
-        {status}
+        {t(`task_status_${status.toLowerCase().replace(' ', '_')}`)} {/* <-- Translated */}
       </Badge>
     );
   };
@@ -210,7 +212,7 @@ const TaskManagement = () => {
     return (
       <Badge className={`${cls} flex items-center gap-1`}>
         {Icon && <Icon className="h-3 w-3" />}
-        {priority}
+        {t(`priority_${priority.toLowerCase()}`)} {/* <-- Translated */}
       </Badge>
     );
   };
@@ -225,30 +227,30 @@ const TaskManagement = () => {
   };
 
   /* ------------------------------------------------------------------ */
-  /*  Loading UI                                                       */
+  /* Loading UI                                                       */
   /* ------------------------------------------------------------------ */
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading tasks...</p>
+          <p className="text-gray-600">{t('loading_tasks')}</p> {/* <-- Translated */}
         </div>
       </div>
     );
   }
 
   /* ------------------------------------------------------------------ */
-  /*  Main render                                                      */
+  /* Main render                                                      */
   /* ------------------------------------------------------------------ */
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900">Task Management</h2>
+          <h2 className="text-3xl font-bold text-gray-900">{t('task_management_title')}</h2> {/* <-- Translated */}
           <p className="text-gray-600 mt-2">
-            {canManageTasks ? 'Assign and manage tasks for your team' : 'View and update your assigned tasks'}
+            {canManageTasks ? t('task_management_desc_admin') : t('task_management_desc_employee')} {/* <-- Translated */}
           </p>
         </div>
 
@@ -257,43 +259,43 @@ const TaskManagement = () => {
             <DialogTrigger asChild>
               <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
                 <Plus className="h-4 w-4 mr-2" />
-                Create Task
+                {t('create_task_btn')} {/* <-- Translated */}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-md">
               <DialogHeader>
-                <DialogTitle>Create New Task</DialogTitle>
-                <DialogDescription>Fill in the task details.</DialogDescription>
+                <DialogTitle>{t('create_new_task_title')}</DialogTitle> {/* <-- Translated */}
+                <DialogDescription>{t('fill_task_details')}</DialogDescription> {/* <-- Translated */}
               </DialogHeader>
               <form onSubmit={handleCreateTask} className="space-y-4">
                 <div>
-                  <Label htmlFor="title">Title</Label>
+                  <Label htmlFor="title">{t('title_label')}</Label> {/* <-- Translated */}
                   <Input
                     id="title"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Enter task title"
+                    placeholder={t('enter_task_title')} // <-- Translated
                     required
                   />
                 </div>
                 <div>
-                  <Label htmlFor="description">Description</Label>
+                  <Label htmlFor="description">{t('description_label')}</Label> {/* <-- Translated */}
                   <Textarea
                     id="description"
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Describe the task..."
+                    placeholder={t('describe_the_task')} // <-- Translated
                     rows={3}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="assigned_to">Assign To</Label>
+                  <Label htmlFor="assigned_to">{t('assign_to_label')}</Label> {/* <-- Translated */}
                   <Select
                     value={formData.assigned_to_id.toString()}
                     onValueChange={(v) => setFormData({ ...formData, assigned_to_id: parseInt(v) })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select user" />
+                      <SelectValue placeholder={t('select_user')} /> {/* <-- Translated */}
                     </SelectTrigger>
                     <SelectContent>
                       {users.map((u) => (
@@ -306,7 +308,7 @@ const TaskManagement = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="priority">Priority</Label>
+                    <Label htmlFor="priority">{t('priority_label')}</Label> {/* <-- Translated */}
                     <Select
                       value={formData.priority}
                       onValueChange={(v) => setFormData({ ...formData, priority: v })}
@@ -315,14 +317,14 @@ const TaskManagement = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Low">Low</SelectItem>
-                        <SelectItem value="Medium">Medium</SelectItem>
-                        <SelectItem value="High">High</SelectItem>
+                        <SelectItem value="Low">{t('priority_low')}</SelectItem> {/* <-- Translated */}
+                        <SelectItem value="Medium">{t('priority_medium')}</SelectItem> {/* <-- Translated */}
+                        <SelectItem value="High">{t('priority_high')}</SelectItem> {/* <-- Translated */}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="due_date">Due Date</Label>
+                    <Label htmlFor="due_date">{t('due_date_label')}</Label> {/* <-- Translated */}
                     <Input
                       id="due_date"
                       type="date"
@@ -333,9 +335,9 @@ const TaskManagement = () => {
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                    Cancel
+                    {t('cancel')} {/* <-- Translated */}
                   </Button>
-                  <Button type="submit">Create Task</Button>
+                  <Button type="submit">{t('create_task_btn')}</Button>
                 </div>
               </form>
             </DialogContent>
@@ -360,19 +362,19 @@ const TaskManagement = () => {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-600">Total Tasks</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-600">{t('total_tasks_stat')}</CardTitle></CardHeader> {/* <-- Translated */}
           <CardContent><div className="text-2xl font-bold">{stats.total}</div></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-yellow-600">Pending</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-yellow-600">{t('stat_pending')}</CardTitle></CardHeader> {/* <-- Translated */}
           <CardContent><div className="text-2xl font-bold text-yellow-600">{stats.pending}</div></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-blue-600">In Progress</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-blue-600">{t('stat_in_progress')}</CardTitle></CardHeader> {/* <-- Translated */}
           <CardContent><div className="text-2xl font-bold text-blue-600">{stats.inProgress}</div></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-green-600">Completed</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-green-600">{t('stat_completed')}</CardTitle></CardHeader> {/* <-- Translated */}
           <CardContent><div className="text-2xl font-bold text-green-600">{stats.completed}</div></CardContent>
         </Card>
       </div>
@@ -382,21 +384,21 @@ const TaskManagement = () => {
         {/* Header + Filters (always visible) */}
         <CardHeader className="flex-shrink-0">
           <div className="flex items-center justify-between gap-4">
-            <CardTitle>All Tasks</CardTitle>
+            <CardTitle>{t('all_tasks_title')}</CardTitle> {/* <-- Translated */}
             <div className="flex gap-4">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="Pending">Pending</SelectItem>
-                  <SelectItem value="In Progress">In Progress</SelectItem>
-                  <SelectItem value="Completed">Completed</SelectItem>
+                  <SelectItem value="all">{t('all_status')}</SelectItem> {/* <-- Translated */}
+                  <SelectItem value="Pending">{t('status_pending')}</SelectItem> {/* <-- Translated */}
+                  <SelectItem value="In Progress">{t('status_in_progress')}</SelectItem> {/* <-- Translated */}
+                  <SelectItem value="Completed">{t('status_completed')}</SelectItem> {/* <-- Translated */}
                 </SelectContent>
               </Select>
               <div className="relative w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Search tasks..."
+                  placeholder={t('search_tasks_placeholder')} // <-- Translated
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -411,19 +413,19 @@ const TaskManagement = () => {
           <Table>
             <TableHeader className="sticky top-0 bg-white z-10 border-b">
               <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Assigned To</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Priority</TableHead>
-                <TableHead>Due Date</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead>{t('table_title')}</TableHead> {/* <-- Translated */}
+                <TableHead>{t('table_assigned_to')}</TableHead> {/* <-- Translated */}
+                <TableHead>{t('table_status')}</TableHead> {/* <-- Translated */}
+                <TableHead>{t('table_priority')}</TableHead> {/* <-- Translated */}
+                <TableHead>{t('table_due_date')}</TableHead> {/* <-- Translated */}
+                <TableHead>{t('table_actions')}</TableHead> {/* <-- Translated */}
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredTasks.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-gray-500 py-8">
-                    No tasks found
+                    {t('no_tasks_found')} {/* <-- Translated */}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -441,27 +443,24 @@ const TaskManagement = () => {
                     <TableCell>
                       {task.due_date ? (
                         <div className={isOverdue(task.due_date) ? 'text-red-600 font-medium' : ''}>
-                          {new Date(task.due_date).toLocaleDateString()}
-                          {isOverdue(task.due_date) && <span className="text-xs block">Overdue</span>}
+                          {new Date(task.due_date).toLocaleDateString(t('locale'))}
+                          {isOverdue(task.due_date) && <span className="text-xs block">{t('overdue')}</span>} {/* <-- Translated */}
                         </div>
                       ) : (
-                        'N/A'
+                        t('not_set') // <-- Translated
                       )}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => openViewDialog(task)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => openEditDialog(task)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => openViewDialog(task)} title={t('view')}><Eye className="h-4 w-4" /></Button> {/* <-- Translated title */}
+                        <Button size="sm" variant="outline" onClick={() => openEditDialog(task)} title={t('edit')}><Edit className="h-4 w-4" /></Button> {/* <-- Translated title */}
                         {canManageTasks && (
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => handleDeleteTask(task.id)}
                             className="text-red-600 hover:text-red-800"
+                            title={t('delete')} // <-- Translated title
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -476,42 +475,42 @@ const TaskManagement = () => {
         </CardContent>
       </Card>
 
-      {/* ==================== DIALOGS (unchanged) ==================== */}
+      {/* ==================== DIALOGS (Translated) ==================== */}
       {/* View Dialog */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Task Details</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('task_details_title')}</DialogTitle></DialogHeader> {/* <-- Translated */}
           {selectedTask && (
             <div className="space-y-4">
-              <div><Label className="text-gray-600">Title</Label><p className="font-medium text-lg">{selectedTask.title}</p></div>
-              <div><Label className="text-gray-600">Description</Label><p className="text-sm mt-1">{selectedTask.description || 'None'}</p></div>
-              <div><Label className="text-gray-600">Assigned To</Label><p className="font-medium">{selectedTask.assigned_to?.first_name} {selectedTask.assigned_to?.last_name}</p></div>
-              <div><Label className="text-gray-600">Assigned By</Label><p className="font-medium">{selectedTask.assigned_by?.first_name} {selectedTask.assigned_by?.last_name}</p></div>
+              <div><Label className="text-gray-600">{t('title_label')}</Label><p className="font-medium text-lg">{selectedTask.title}</p></div> {/* <-- Translated */}
+              <div><Label className="text-gray-600">{t('description_label')}</Label><p className="text-sm mt-1">{selectedTask.description || t('none')}</p></div> {/* <-- Translated */}
+              <div><Label className="text-gray-600">{t('assigned_to_label')}</Label><p className="font-medium">{selectedTask.assigned_to?.first_name} {selectedTask.assigned_to?.last_name}</p></div> {/* <-- Translated */}
+              <div><Label className="text-gray-600">{t('assigned_by_label')}</Label><p className="font-medium">{selectedTask.assigned_by?.first_name} {selectedTask.assigned_by?.last_name}</p></div> {/* <-- Translated */}
               <div className="grid grid-cols-2 gap-4">
-                <div><Label className="text-gray-600">Status</Label><div className="mt-1">{getStatusBadge(selectedTask.status)}</div></div>
-                <div><Label className="text-gray-600">Priority</Label><div className="mt-1">{getPriorityBadge(selectedTask.priority)}</div></div>
+                <div><Label className="text-gray-600">{t('status_label')}</Label><div className="mt-1">{getStatusBadge(selectedTask.status)}</div></div> {/* <-- Translated */}
+                <div><Label className="text-gray-600">{t('priority_label')}</Label><div className="mt-1">{getPriorityBadge(selectedTask.priority)}</div></div> {/* <-- Translated */}
               </div>
-              <div><Label className="text-gray-600">Due Date</Label><p className="font-medium">{selectedTask.due_date ? new Date(selectedTask.due_date).toLocaleDateString() : 'Not set'}</p></div>
-              <div><Label className="text-gray-600">Created At</Label><p className="text-sm">{new Date(selectedTask.created_at).toLocaleString()}</p></div>
+              <div><Label className="text-gray-600">{t('due_date_label')}</Label><p className="font-medium">{selectedTask.due_date ? new Date(selectedTask.due_date).toLocaleDateString(t('locale')) : t('not_set')}</p></div> {/* <-- Translated */}
+              <div><Label className="text-gray-600">{t('created_at_label')}</Label><p className="text-sm">{selectedTask.created_at ? new Date(selectedTask.created_at).toLocaleString(t('locale')) : t('not_set')}</p></div> {/* <-- Translated */}
             </div>
           )}
-          <div className="flex justify-end"><Button onClick={() => setIsViewDialogOpen(false)}>Close</Button></div>
+          <div className="flex justify-end"><Button onClick={() => setIsViewDialogOpen(false)}>{t('close')}</Button></div> {/* <-- Translated */}
         </DialogContent>
       </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Edit Task</DialogTitle><DialogDescription>Update task details.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>{t('edit_task_title')}</DialogTitle><DialogDescription>{t('update_task_details')}</DialogDescription></DialogHeader> {/* <-- Translated */}
           <form onSubmit={handleUpdateTask} className="space-y-4">
             {canManageTasks && (
               <>
-                <div><Label htmlFor="edit_title">Title</Label><Input id="edit_title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required /></div>
-                <div><Label htmlFor="edit_description">Description</Label><Textarea id="edit_description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={3} /></div>
+                <div><Label htmlFor="edit_title">{t('title_label')}</Label><Input id="edit_title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required /></div> {/* <-- Translated */}
+                <div><Label htmlFor="edit_description">{t('description_label')}</Label><Textarea id="edit_description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={3} /></div> {/* <-- Translated */}
                 <div>
-                  <Label htmlFor="edit_assigned_to">Assign To</Label>
+                  <Label htmlFor="edit_assigned_to">{t('assign_to_label')}</Label> {/* <-- Translated */}
                   <Select value={formData.assigned_to_id.toString()} onValueChange={(v) => setFormData({ ...formData, assigned_to_id: parseInt(v) })}>
-                    <SelectTrigger><SelectValue placeholder="Select user" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('select_user')} /></SelectTrigger> {/* <-- Translated */}
                     <SelectContent>
                       {users.map((u) => (
                         <SelectItem key={u.id} value={u.id.toString()}>
@@ -523,37 +522,37 @@ const TaskManagement = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="edit_priority">Priority</Label>
+                    <Label htmlFor="edit_priority">{t('priority_label')}</Label> {/* <-- Translated */}
                     <Select value={formData.priority} onValueChange={(v) => setFormData({ ...formData, priority: v })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Low">Low</SelectItem>
-                        <SelectItem value="Medium">Medium</SelectItem>
-                        <SelectItem value="High">High</SelectItem>
+                        <SelectItem value="Low">{t('priority_low')}</SelectItem> {/* <-- Translated */}
+                        <SelectItem value="Medium">{t('priority_medium')}</SelectItem> {/* <-- Translated */}
+                        <SelectItem value="High">{t('priority_high')}</SelectItem> {/* <-- Translated */}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="edit_due_date">Due Date</Label>
+                    <Label htmlFor="edit_due_date">{t('due_date_label')}</Label> {/* <-- Translated */}
                     <Input id="edit_due_date" type="date" value={formData.due_date} onChange={(e) => setFormData({ ...formData, due_date: e.target.value })} />
                   </div>
                 </div>
               </>
             )}
             <div>
-              <Label htmlFor="edit_status">Status</Label>
+              <Label htmlFor="edit_status">{t('status_label')}</Label> {/* <-- Translated */}
               <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Pending">Pending</SelectItem>
-                  <SelectItem value="In Progress">In Progress</SelectItem>
-                  <SelectItem value="Completed">Completed</SelectItem>
+                  <SelectItem value="Pending">{t('status_pending')}</SelectItem> {/* <-- Translated */}
+                  <SelectItem value="In Progress">{t('status_in_progress')}</SelectItem> {/* <-- Translated */}
+                  <SelectItem value="Completed">{t('status_completed')}</SelectItem> {/* <-- Translated */}
                 </SelectContent>
               </Select>
             </div>
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
-              <Button type="submit">Update Task</Button>
+              <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>{t('cancel')}</Button> {/* <-- Translated */}
+              <Button type="submit">{t('update_task_btn')}</Button> {/* <-- Translated */}
             </div>
           </form>
         </DialogContent>

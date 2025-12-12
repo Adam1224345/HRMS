@@ -2,17 +2,19 @@ import os
 import sys
 from dotenv import load_dotenv
 from datetime import timedelta
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, request, session, g
+from flask_babel import Babel, gettext as _
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from flask_socketio import SocketIO
 from flask_mail import Mail
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+
 # This file is at: hr_backend/src/main.py
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))     
-PROJECT_ROOT = os.path.dirname(BASE_DIR)                  
-STATIC_FOLDER = os.path.join(BASE_DIR, "static")          
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(BASE_DIR)
+STATIC_FOLDER = os.path.join(BASE_DIR, "static")
 
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
@@ -24,14 +26,19 @@ sys.path.insert(0, PROJECT_ROOT)
 # ---------------------------------------------------
 app = Flask(
     __name__,
-    static_folder=STATIC_FOLDER,   # correct location of your React build
-    static_url_path=""             # serve static files without /static prefix
+    static_folder=STATIC_FOLDER,
+    static_url_path=""
 )
 
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "dev-jwt-secret")
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=15)
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=30)
+
+# Babel Configuration
+app.config['LANGUAGES'] = ['en', 'ur']
+app.config['BABEL_DEFAULT_LOCALE'] = 'en'
+app.config['BABEL_DEFAULT_TIMEZONE'] = 'UTC'
 
 # Neon PostgreSQL
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("SQLALCHEMY_DATABASE_URI")
@@ -78,9 +85,32 @@ CORS(app, supports_credentials=True)
 limiter.init_app(app)
 jwt = JWTManager(app)
 
+# ---------------------------------------------------
+# BABEL FIXED FOR FLASK-BABEL 4.x
+# ---------------------------------------------------
+def get_locale():
+    # 1. Query param
+    lang = request.args.get('lang')
+    if lang in app.config['LANGUAGES']:
+        return lang
+
+    # 2. Session
+    if "lang" in session and session["lang"] in app.config["LANGUAGES"]:
+        return session["lang"]
+
+    # 3. Browser language
+    return request.accept_languages.best_match(app.config["LANGUAGES"])
+
+# NEW Correct Babel initialization
+babel = Babel(app, locale_selector=get_locale)
+
+@app.before_request
+def before_request():
+    g.locale = get_locale()
+
 @jwt.token_in_blocklist_loader
 def check_blocklist(jwt_header, jwt_payload):
-    return False   # no blocklist yet
+    return False  # no blocklist yet
 
 # ---------------------------------------------------
 # NOTIFICATIONS
@@ -106,6 +136,7 @@ from src.routes.calendar import calendar_bp
 from src.routes.audit_log import audit_log_bp
 from src.routes.notification import notification_bp
 from src.routes.document import document_bp
+from src.routes.lang import lang_bp
 
 try:
     from src.routes.task import task_bp
@@ -121,6 +152,7 @@ app.register_blueprint(calendar_bp, url_prefix="/api")
 app.register_blueprint(audit_log_bp, url_prefix="/api")
 app.register_blueprint(notification_bp, url_prefix="/api")
 app.register_blueprint(document_bp, url_prefix="/api")
+app.register_blueprint(lang_bp, url_prefix="/api")
 
 if task_bp:
     app.register_blueprint(task_bp, url_prefix="/api")
@@ -133,7 +165,7 @@ if task_bp:
 def serve_frontend(path):
     file_path = os.path.join(STATIC_FOLDER, path)
 
-    # Serve actual static files (assets, JS, CSS)
+    # Serve static files
     if path and os.path.exists(file_path):
         return send_from_directory(STATIC_FOLDER, path)
 

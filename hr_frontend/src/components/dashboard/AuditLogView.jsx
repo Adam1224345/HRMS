@@ -1,5 +1,5 @@
-// src/views/AuditLogView.jsx
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next'; 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -31,6 +31,8 @@ if (!axios.defaults.baseURL) {
 }
 
 const AuditLogView = () => {
+  const { t } = useTranslation();
+
   // -----------------------------------------------------------------
   // State
   // -----------------------------------------------------------------
@@ -49,7 +51,7 @@ const AuditLogView = () => {
   const [endDateFilter, setEndDateFilter] = useState('');
 
   // -----------------------------------------------------------------
-  // Fetch logs (axios version – mirrors CalendarView)
+  // Fetch logs 
   // -----------------------------------------------------------------
   const fetchLogs = useCallback(async () => {
     setLoading(true);
@@ -57,7 +59,7 @@ const AuditLogView = () => {
 
     const token = localStorage.getItem('token');
     if (!token) {
-      setError('Please log in first.');
+      setError(t('alert_please_log_in'));
       setLoading(false);
       return;
     }
@@ -86,7 +88,7 @@ const AuditLogView = () => {
       const msg =
         err.response?.data?.error ||
         err.message ||
-        'Failed to load logs';
+        t('error_failed_to_load_logs');
       setError(msg);
     } finally {
       setLoading(false);
@@ -118,11 +120,11 @@ const AuditLogView = () => {
   };
 
   // -----------------------------------------------------------------
-  // Helpers (same as original)
+  // Helpers
   // -----------------------------------------------------------------
   const formatTimestamp = (ts) => {
     try {
-      return new Date(ts).toLocaleString('en-GB', {
+      return new Date(ts).toLocaleString(t('locale') || 'en-GB', { 
         year: 'numeric',
         month: 'short',
         day: '2-digit',
@@ -132,12 +134,33 @@ const AuditLogView = () => {
         hour12: true,
       });
     } catch {
-      return 'Invalid Date';
+      return t('invalid_date');
     }
   };
 
+  // -----------------------------------------------------------------
+  // 🔥 FIXED VERSION — Handles object OR string safely
+  // -----------------------------------------------------------------
   const formatDetails = (details) => {
     if (!details) return <span className="text-xs text-gray-500">—</span>;
+
+    // If backend sends already parsed object
+    if (typeof details === 'object') {
+      return (
+        <ul className="text-xs space-y-1">
+          {Object.entries(details).map(([k, v]) => (
+            <li key={k}>
+              <strong>{k}:</strong>{' '}
+              <span className="font-mono">
+                {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      );
+    }
+
+    // If backend sends JSON string
     try {
       const obj = JSON.parse(details);
       return (
@@ -164,33 +187,35 @@ const AuditLogView = () => {
     <div className="space-y-6 p-4">
       <Card>
         <CardHeader>
-          <CardTitle>Audit Logs ({totalLogs} total)</CardTitle>
+          <CardTitle>
+            {t('audit_logs_title')} ({totalLogs} {t('total')})
+          </CardTitle>
         </CardHeader>
 
         <CardContent>
           {/* ---------- Filters ---------- */}
           <div className="flex flex-wrap gap-3 mb-6 items-end">
             <div className="flex-1 min-w-[140px]">
-              <label className="text-sm font-medium block mb-1">User ID</label>
+              <label className="text-sm font-medium block mb-1">{t('user_id')}</label>
               <Input
                 type="number"
-                placeholder="e.g. 5"
+                placeholder={t('user_id_placeholder')}
                 value={userIdFilter}
                 onChange={(e) => setUserIdFilter(e.target.value)}
               />
             </div>
 
             <div className="flex-1 min-w-[180px]">
-              <label className="text-sm font-medium block mb-1">Action</label>
+              <label className="text-sm font-medium block mb-1">{t('action')}</label>
               <Input
-                placeholder="e.g. LOGIN"
+                placeholder={t('action_placeholder')}
                 value={actionFilter}
                 onChange={(e) => setActionFilter(e.target.value)}
               />
             </div>
 
             <div className="flex-1 min-w-[160px]">
-              <label className="text-sm font-medium block mb-1">Start Date</label>
+              <label className="text-sm font-medium block mb-1">{t('start_date')}</label>
               <Input
                 type="date"
                 value={startDateFilter}
@@ -199,7 +224,7 @@ const AuditLogView = () => {
             </div>
 
             <div className="flex-1 min-w-[160px]">
-              <label className="text-sm font-medium block mb-1">End Date</label>
+              <label className="text-sm font-medium block mb-1">{t('end_date')}</label>
               <Input
                 type="date"
                 value={endDateFilter}
@@ -209,25 +234,25 @@ const AuditLogView = () => {
 
             <Button onClick={handleFilter} size="sm">
               <Search className="h-4 w-4 mr-1" />
-              Filter
+              {t('filter')}
             </Button>
 
             <Button onClick={handleReset} variant="outline" size="sm">
               <RotateCcw className="h-4 w-4 mr-1" />
-              Reset
+              {t('reset')}
             </Button>
           </div>
 
           {/* ---------- Loading / Error ---------- */}
           {loading && (
             <p className="text-center text-muted-foreground py-4">
-              Loading logs...
+              {t('loading_logs')}
             </p>
           )}
 
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-              <strong>Error:</strong> {error}
+              <strong>{t('error_colon')}</strong> {error}
             </div>
           )}
 
@@ -238,13 +263,13 @@ const AuditLogView = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[60px]">ID</TableHead>
-                      <TableHead className="w-[80px]">User ID</TableHead>
-                      <TableHead className="w-[160px]">Action</TableHead>
-                      <TableHead className="w-[110px]">Resource</TableHead>
-                      <TableHead className="w-[100px]">Res ID</TableHead>
-                      <TableHead className="w-[170px]">Timestamp</TableHead>
-                      <TableHead className="min-w-[200px]">Details</TableHead>
+                      <TableHead className="w-[60px]">{t('table_id')}</TableHead>
+                      <TableHead className="w-[80px]">{t('table_user_id')}</TableHead>
+                      <TableHead className="w-[160px]">{t('table_action')}</TableHead>
+                      <TableHead className="w-[110px]">{t('table_resource')}</TableHead>
+                      <TableHead className="w-[100px]">{t('table_res_id')}</TableHead>
+                      <TableHead className="w-[170px]">{t('table_timestamp')}</TableHead>
+                      <TableHead className="min-w-[200px]">{t('table_details')}</TableHead>
                     </TableRow>
                   </TableHeader>
 
@@ -263,6 +288,8 @@ const AuditLogView = () => {
                         <TableCell className="text-xs">
                           {formatTimestamp(log.timestamp)}
                         </TableCell>
+
+                        {/* 🔥 SAFE DETAILS FIX */}
                         <TableCell className="max-w-xs">
                           {formatDetails(log.details)}
                         </TableCell>
@@ -320,9 +347,9 @@ const AuditLogView = () => {
           {/* ---------- Empty State ---------- */}
           {!loading && !error && logs.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
-              <p className="text-lg mb-2">No audit logs found</p>
+              <p className="text-lg mb-2">{t('no_audit_logs_found')}</p>
               <p className="text-sm">
-                Try adjusting your filters or create some activity.
+                {t('adjust_filters_or_create_activity')}
               </p>
             </div>
           )}

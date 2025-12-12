@@ -5,10 +5,20 @@ class Notification(db.Model):
     __tablename__ = 'notifications'
 
     id = db.Column(db.Integer, primary_key=True)
-    
-    recipient_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    sender_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    
+
+    # FIX: Allow NULL so deleting a user won't break notifications/history
+    recipient_id = db.Column(
+        db.Integer,
+        db.ForeignKey('users.id', ondelete="SET NULL"),
+        nullable=True
+    )
+
+    sender_id = db.Column(
+        db.Integer,
+        db.ForeignKey('users.id', ondelete="SET NULL"),
+        nullable=True
+    )
+
     message = db.Column(db.String(500), nullable=False)
     type = db.Column(db.String(50), nullable=False)
     related_id = db.Column(db.Integer, nullable=True)
@@ -19,12 +29,13 @@ class Notification(db.Model):
     recipient = db.relationship(
         'User',
         foreign_keys=[recipient_id],
-        backref=db.backref('notifications', lazy='dynamic')
+        backref=db.backref('notifications', lazy='dynamic', passive_deletes=True)
     )
+
     sender = db.relationship(
         'User',
         foreign_keys=[sender_id],
-        backref=db.backref('sent_notifications', lazy='dynamic')
+        backref=db.backref('sent_notifications', lazy='dynamic', passive_deletes=True)
     )
 
     def to_dict(self):
@@ -36,7 +47,18 @@ class Notification(db.Model):
             'type': self.type,
             'related_id': self.related_id,
             'is_read': self.is_read,
-            
+
+            # Do NOT crash when user is deleted
+            'recipient': {
+                'id': self.recipient.id if self.recipient else None,
+                'username': self.recipient.username if self.recipient else "Deleted User"
+            },
+
+            'sender': {
+                'id': self.sender.id if self.sender else None,
+                'username': self.sender.username if self.sender else "Deleted User"
+            },
+
             'timestamp': self.timestamp.isoformat() + 'Z' if self.timestamp else None
         }
 

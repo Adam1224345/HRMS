@@ -1,64 +1,63 @@
-import json
 from flask import request
-from src.models.user import db
+from src.models.audit_log import db, AuditLog
 
-# SENSITIVE KEYS THAT MUST NEVER BE LOGGED
-SENSITIVE_KEYS = {
-    "password", "new_password", "current_password",
-    "token", "reset_token", "access_token", "refresh_token",
-    "email", "otp"
-}
+# System event = NULL user_id
+SYSTEM_USER_ID = None
 
-def sanitize_details(details: dict) -> dict:
+
+def get_client_ip():
+    """Safely get client IP without crashing on background tasks."""
+    try:
+        return request.remote_addr
+    except Exception:
+        return "Unknown"
+
+
+def get_user_agent():
+    """Safely get User-Agent header even if no request context."""
+    try:
+        return request.headers.get("User-Agent", "Unknown")
+    except Exception:
+        return "Unknown"
+
+
+def log_action(action, resource_type=None, resource_id=None, user_id=None, details=None):
     """
-    Sanitizes sensitive fields so they are not stored in logs.
+    Create an audit log entry.
+    user_id:
+        - Logged in user → integer
+        - System event → None
     """
-    if not isinstance(details, dict):
-        return {}
 
-    safe = {}
-    for key, value in details.items():
-        if key.lower() in SENSITIVE_KEYS:
-            safe[key] = "[REDACTED]"
-        else:
-            safe[key] = value
-    return safe
+    # FIX: Ensure valid user_id
+    final_user_id = user_id if user_id not in (None, 0, "0") else SYSTEM_USER_ID
 
+    log_entry = AuditLog(
+        user_id=final_user_id,
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        details=details,
+    )
 
-def log_audit_event(user_id, action, resource_type=None, resource_id=None, details=None):
-    """
-    Secure audit logging. Does NOT break application if logging fails.
-    """
+    db.session.add(log_entry)
 
     try:
-        from src.models.audit_log import AuditLog
-
-        # --- Request Meta ---
-        meta = {
-            "ip": request.remote_addr,
-            "user_agent": request.headers.get("User-Agent", "unknown"),
-            "path": request.path,
-            "method": request.method
-        }
-
-        # --- Merge details ---
-        if isinstance(details, dict):
-            meta.update(sanitize_details(details))
-
-        details_json = json.dumps(meta)
-
-        log = AuditLog(
-            user_id=user_id or 0,
-            action=action,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            details=details_json
-        )
-
-        db.session.add(log)
         db.session.commit()
-
     except Exception as e:
-        # NEVER crash API due to logging failure
         db.session.rollback()
-        print(f"[AUDIT LOG ERROR] {str(e)}")
+        print("Audit Log Error:", e)
+
+
+def log_audit_event(action, resource_type=None, resource_id=None, user_id=None, details=None):
+    """
+    Wrapper function.
+    IMPORTANT: This keeps the SAME signature your entire app uses.
+    """
+    return log_action(
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        user_id=user_id,
+        details=details
+    )
