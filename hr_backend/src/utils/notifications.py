@@ -3,6 +3,7 @@ from src.models.user import User
 from flask_mail import Message
 from threading import Thread
 from datetime import datetime
+import os
 
 # Global variables to hold app extensions
 _socketio = None
@@ -30,7 +31,8 @@ def send_email_async(msg):
             # Log the error but don't crash the server
             print(f"⚠️ EMAIL FAILURE: {e}")
 
-def send_notification(recipient_id, message, type="info", related_id=None, sender_id=None, send_email=True):
+# 👇 FIX: 'title' argument add kiya (Default None)
+def send_notification(recipient_id, message, title=None, type="info", related_id=None, sender_id=None, send_email=True):
     """
     1. Saves notification to Database.
     2. Sends real-time alert via Socket.IO.
@@ -42,9 +44,11 @@ def send_notification(recipient_id, message, type="info", related_id=None, sende
         raise RuntimeError("Notifications not initialized. Call setup_notifications() first.")
 
     # -------------------- 1. DATABASE ENTRY --------------------
+    # 👇 FIX: Title pass kiya Model ko
     notification = Notification.create_notification(
         recipient_id=recipient_id,
         sender_id=sender_id,
+        title=title,  # <-- Saving Title
         message=message,
         type=type,
         related_id=related_id
@@ -52,7 +56,9 @@ def send_notification(recipient_id, message, type="info", related_id=None, sende
 
     # -------------------- 2. REAL-TIME SOCKET ALERT --------------------
     try:
-        _socketio.emit('new_notification', notification.to_dict(), room=str(recipient_id))
+        if _socketio:
+            _socketio.emit('new_notification', notification.to_dict(), room=str(recipient_id))
+            print(f"⚡ Socket sent to User {recipient_id}")
     except Exception as e:
         print(f"Socket Error (Non-critical): {e}")
 
@@ -67,7 +73,6 @@ def send_notification(recipient_id, message, type="info", related_id=None, sende
         email = user.email.lower().strip()
 
         # --- B. Smart Blocker (Prevent "Delivery Incomplete" Errors) ---
-        # Any email ending in these domains will be IGNORED silently.
         blocked_domains = ['hrms.com', 'example.com', 'test.com', 'localhost', 'fake.com', 'mydomain.com']
         
         try:
@@ -79,10 +84,12 @@ def send_notification(recipient_id, message, type="info", related_id=None, sende
             return notification
 
         # --- C. Configuration ---
-        # Get the sender address from main.py config
         sender_email = _app.config.get('MAIL_USERNAME', 'System')
-        # Update this URL to your actual frontend URL
-        app_url = "http://localhost:5173" 
+        # Frontend URL (Environment variable se lein toh behtar hai)
+        app_url = os.getenv('FRONTEND_URL', "http://localhost:5173") 
+
+        # Display Title Logic
+        display_title = title if title else "New Notification"
 
         # --- D. PROFESSIONAL HTML TEMPLATE (Indigo Theme) ---
         html = f"""
@@ -103,7 +110,7 @@ def send_notification(recipient_id, message, type="info", related_id=None, sende
                             <tr>
                                 <td bgcolor="#4f46e5" style="padding: 30px; text-align: center;">
                                     <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: 1px;">HRMS</h1>
-                                    <p style="color: #e0e7ff; margin: 5px 0 0; font-size: 14px; font-weight: 500;">OFFICIAL NOTIFICATION</p>
+                                    <p style="color: #e0e7ff; margin: 5px 0 0; font-size: 14px; font-weight: 500;">{display_title.upper()}</p>
                                 </td>
                             </tr>
 
@@ -123,8 +130,8 @@ def send_notification(recipient_id, message, type="info", related_id=None, sende
                                     <table border="0" cellpadding="0" cellspacing="0" width="100%">
                                         <tr>
                                             <td align="center">
-                                                <a href="{app_url}" style="display: inline-block; padding: 14px 32px; background-color: #4f46e5; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
-                                                    Open Dashboard
+                                                <a href="{app_url}/dashboard" style="display: inline-block; padding: 14px 32px; background-color: #4f46e5; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                                                    View in Dashboard
                                                 </a>
                                             </td>
                                         </tr>
@@ -139,14 +146,9 @@ def send_notification(recipient_id, message, type="info", related_id=None, sende
                             <tr>
                                 <td bgcolor="#1f2937" style="padding: 20px; text-align: center; color: #9ca3af; font-size: 12px;">
                                     <p style="margin: 0;">&copy; 2025 HRMS System • All rights reserved</p>
-                                    <p style="margin: 5px 0 0;">System email sent via {sender_email}</p>
                                 </td>
                             </tr>
                         </table>
-                        
-                        <p style="text-align: center; color: #9ca3af; font-size: 11px; margin-top: 20px;">
-                            This is an automated message. Please do not reply.
-                        </p>
                     </td>
                 </tr>
             </table>
@@ -155,9 +157,10 @@ def send_notification(recipient_id, message, type="info", related_id=None, sende
         </html>
         """
         
-        # --- E. Send Async ---
+        email_subject = f"HRMS: {title}" if title else f"HRMS Notification: {type.title()}"
+        
         msg = Message(
-            subject=f"HRMS Alert: {type.title()}",
+            subject=email_subject,
             recipients=[email],
             html=html
         )
