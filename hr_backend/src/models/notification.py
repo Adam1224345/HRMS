@@ -5,8 +5,10 @@ class Notification(db.Model):
     __tablename__ = 'notifications'
 
     id = db.Column(db.Integer, primary_key=True)
+    
+    # ✅ FIX: 'title' column zaroori hai naye notification system ke liye
+    title = db.Column(db.String(255), nullable=True)
 
-    # FIX: Allow NULL so deleting a user won't break notifications/history
     recipient_id = db.Column(
         db.Integer,
         db.ForeignKey('users.id', ondelete="SET NULL"),
@@ -41,32 +43,30 @@ class Notification(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'title': self.title,  # <-- Added title in API response
             'user_id': self.recipient_id,
             'sender_id': self.sender_id,
             'message': self.message,
             'type': self.type,
             'related_id': self.related_id,
             'is_read': self.is_read,
-
-            # Do NOT crash when user is deleted
             'recipient': {
                 'id': self.recipient.id if self.recipient else None,
                 'username': self.recipient.username if self.recipient else "Deleted User"
             },
-
             'sender': {
                 'id': self.sender.id if self.sender else None,
-                'username': self.sender.username if self.sender else "Deleted User"
+                'username': self.sender.username if self.sender else "System"
             },
-
             'timestamp': self.timestamp.isoformat() + 'Z' if self.timestamp else None
         }
 
     @staticmethod
-    def create_notification(recipient_id, message, type, related_id=None, sender_id=None):
+    def create_notification(recipient_id, message, type, title=None, related_id=None, sender_id=None):
         new_notification = Notification(
             recipient_id=recipient_id,
             sender_id=sender_id,
+            title=title,  
             message=message,
             type=type,
             related_id=related_id
