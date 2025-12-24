@@ -1,5 +1,5 @@
 from src.models.user import db
-from datetime import datetime, timezone  # ← timezone import zaroori
+from datetime import datetime, timezone
 
 class RefreshToken(db.Model):
     __tablename__ = "refresh_tokens"
@@ -11,7 +11,12 @@ class RefreshToken(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
 
-    user = db.relationship("User", backref="refresh_tokens", lazy=True)
+    # 👇 YEH LINE UPDATE KI HAI (Cascade Fix for NotNullViolation)
+    user = db.relationship(
+        "User", 
+        backref=db.backref("refresh_tokens", cascade="all, delete-orphan"), 
+        lazy=True
+    )
 
     @staticmethod
     def add_token(user_id, jti, expires_at):
@@ -23,7 +28,7 @@ class RefreshToken(db.Model):
         token = RefreshToken(
             user_id=user_id,
             jti=jti or "fallback-jti",
-            expires_at=expires_at  # Yeh already aware UTC datetime hoga
+            expires_at=expires_at 
         )
         db.session.add(token)
         db.session.commit()
