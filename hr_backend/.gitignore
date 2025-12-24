@@ -1,0 +1,18 @@
+# Virtual environment
+venv/
+
+# Environment variables
+.env
+
+# Byte-compiled files
+*.pyc
+__pycache__/
+
+# Logs
+*.log
+
+# Database
+*.sqlite
+
+# Uploads
+uploads/

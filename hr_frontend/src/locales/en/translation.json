@@ -1,0 +1,31 @@
+{
+  "overview": "Overview",
+  "user_management": "User Management",
+  "role_management": "Role Management",
+  "task_management": "Task Management",
+  "leave_management": "Leave Management",
+  "calendar_view": "Calendar View",
+  "audit_logs": "Audit Logs",
+  "profile_settings": "Profile Settings",
+
+  "welcome_back": "Welcome back!",
+  "quick_actions": "Quick actions to get started",
+
+  "view_tasks": "View Tasks",
+  "check_tasks": "Check your assigned tasks",
+  "go_to_tasks": "Go to Tasks",
+
+  "request_leave": "Request Leave",
+  "submit_leave": "Submit and manage leave requests",
+  "go_to_leave_requests": "Go to Leave Requests",
+
+  "profile_settings_title": "Profile Settings",
+  "update_personal_info": "Update your personal information",
+  "go_to_profile": "Go to Profile",
+
+  "sign_out": "Sign Out",
+
+  "no_notifications": "No notifications yet",
+  "clear_all": "Clear all",
+  "mark_all_read": "Mark all read"
+}

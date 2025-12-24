@@ -1,0 +1,31 @@
+{
+  "overview": "جائزہ",
+  "user_management": "صارفین کا انتظام",
+  "role_management": "کردار کا انتظام",
+  "task_management": "ٹاسک مینجمنٹ",
+  "leave_management": "چھٹیوں کا انتظام",
+  "calendar_view": "کیلنڈر",
+  "audit_logs": "آڈٹ لاگز",
+  "profile_settings": "پروفائل سیٹنگز",
+
+  "welcome_back": "خوش آمدید!",
+  "quick_actions": "شروع کرنے کے لیے فوری اقدامات",
+
+  "view_tasks": "ٹاسک دیکھیں",
+  "check_tasks": "اپنے تفویض کردہ ٹاسک چیک کریں",
+  "go_to_tasks": "ٹاسک پر جائیں",
+
+  "request_leave": "چھٹی کی درخواست",
+  "submit_leave": "چھٹی کی درخواست جمع کریں اور دیکھیں",
+  "go_to_leave_requests": "چھٹی کی درخواستوں پر جائیں",
+
+  "profile_settings_title": "پروفائل سیٹنگز",
+  "update_personal_info": "اپنی ذاتی معلومات اپ ڈیٹ کریں",
+  "go_to_profile": "پروفائل پر جائیں",
+
+  "sign_out": "لاگ آؤٹ",
+
+  "no_notifications": "کوئی اطلاع موجود نہیں",
+  "clear_all": "سب صاف کریں",
+  "mark_all_read": "سب کو پڑھا ہوا نشان زد کریں"
+}
