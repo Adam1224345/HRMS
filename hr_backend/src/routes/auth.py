@@ -13,6 +13,7 @@ from src.models.password_reset_token import PasswordResetToken
 from src.utils.audit_logger import log_audit_event
 from src.utils.password_validator import validate_password_strength
 from flask_mail import Message
+from flasgger import swag_from  # Added for Swagger docs
 
 # ✅ FIX 1: Import timezone and os
 from datetime import timedelta, datetime, timezone
@@ -54,6 +55,34 @@ def apply_limit(limit_str, key_func=get_remote_address):
 # --------------------------------------------------------------------
 @auth_bp.route("/register", methods=["POST"])
 @apply_limit("10/hour", key_func=get_remote_address)
+@swag_from({
+    'tags': ['Auth'],
+    'summary': 'Register a new user',
+    'description': 'Creates a new user account with default Employee role',
+    'parameters': [
+        {
+            'name': 'body',
+            'in': 'body',
+            'required': True,
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'username': {'type': 'string', 'example': 'johndoe'},
+                    'email': {'type': 'string', 'example': 'john@example.com'},
+                    'password': {'type': 'string', 'example': 'StrongPass123!'},
+                    'first_name': {'type': 'string', 'example': 'John'},
+                    'last_name': {'type': 'string', 'example': 'Doe'}
+                },
+                'required': ['username', 'email', 'password']
+            }
+        }
+    ],
+    'responses': {
+        '201': {'description': 'User registered successfully'},
+        '400': {'description': 'Validation error (missing fields, weak password, duplicate)'},
+        '500': {'description': 'Server error'}
+    }
+})
 def register():
     try:
         data = request.get_json() or {}
@@ -109,6 +138,43 @@ def register():
 # --------------------------------------------------------------------
 @auth_bp.route("/login", methods=["POST"])
 @apply_limit("20/hour", key_func=get_remote_address)
+@swag_from({
+    'tags': ['Auth'],
+    'summary': 'User login',
+    'description': 'Authenticates user and returns access + refresh tokens',
+    'parameters': [
+        {
+            'name': 'body',
+            'in': 'body',
+            'required': True,
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'username': {'type': 'string', 'example': 'johndoe or john@example.com'},
+                    'password': {'type': 'string', 'example': 'StrongPass123!'}
+                },
+                'required': ['username', 'password']
+            }
+        }
+    ],
+    'responses': {
+        '200': {
+            'description': 'Login successful',
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'message': {'type': 'string'},
+                    'access_token': {'type': 'string'},
+                    'refresh_token': {'type': 'string'},
+                    'user': {'type': 'object'}
+                }
+            }
+        },
+        '401': {'description': 'Invalid credentials'},
+        '400': {'description': 'Missing fields'},
+        '500': {'description': 'Server error'}
+    }
+})
 def login():
     try:
         data = request.get_json() or {}
@@ -147,7 +213,6 @@ def login():
             refresh_jti = decoded.get("jti")
             exp = decoded.get("exp")
             
-            # ✅ FIX 2: Use aware datetime for expiration
             expires_at = (
                 datetime.fromtimestamp(exp, timezone.utc) 
                 if exp else datetime.now(timezone.utc) + timedelta(days=7)
@@ -156,7 +221,6 @@ def login():
             RefreshToken.add_token(user.id, refresh_jti, expires_at)
 
         except Exception as e:
-            # ✅ FIX 3: Use aware datetime for fallback
             RefreshToken.add_token(
                 user.id, None, datetime.now(timezone.utc) + timedelta(days=7)
             )
@@ -186,6 +250,16 @@ def login():
 @auth_bp.route("/token/refresh", methods=["POST"])
 @jwt_required(refresh=True)
 @apply_limit("60/hour", key_func=user_id_key_func)
+@swag_from({
+    'tags': ['Auth'],
+    'summary': 'Refresh access token',
+    'description': 'Uses refresh token to generate new access token',
+    'security': [{'Bearer': []}],
+    'responses': {
+        '200': {'description': 'Tokens refreshed'},
+        '401': {'description': 'Invalid or revoked refresh token'}
+    }
+})
 def refresh():
     try:
         current_payload = get_jwt()
@@ -204,7 +278,6 @@ def refresh():
             new_jti = decoded_new.get("jti")
             exp = decoded_new.get("exp")
             
-            # ✅ FIX 4: Use aware datetime for new token
             new_expires_at = (
                 datetime.fromtimestamp(exp, timezone.utc)
                 if exp
@@ -213,7 +286,6 @@ def refresh():
             RefreshToken.add_token(int(user_id), new_jti, new_expires_at)
 
         except Exception as e:
-            # ✅ FIX 5: Use aware datetime for fallback
             RefreshToken.add_token(
                 int(user_id), None, datetime.now(timezone.utc) + timedelta(days=7)
             )
@@ -239,6 +311,15 @@ def refresh():
 # --------------------------------------------------------------------
 @auth_bp.route("/logout", methods=["POST"])
 @jwt_required()
+@swag_from({
+    'tags': ['Auth'],
+    'summary': 'User logout',
+    'description': 'Revokes current access token',
+    'security': [{'Bearer': []}],
+    'responses': {
+        '200': {'description': 'Successfully logged out'}
+    }
+})
 def logout():
     try:
         user_id = int(get_jwt_identity())
@@ -266,6 +347,15 @@ def logout():
 # --------------------------------------------------------------------
 @auth_bp.route("/profile", methods=["GET"])
 @jwt_required()
+@swag_from({
+    'tags': ['Auth'],
+    'summary': 'Get current user profile',
+    'security': [{'Bearer': []}],
+    'responses': {
+        '200': {'description': 'User profile'},
+        '404': {'description': 'User not found'}
+    }
+})
 def get_profile():
     try:
         user_id = int(get_jwt_identity())
@@ -284,6 +374,30 @@ def get_profile():
 # --------------------------------------------------------------------
 @auth_bp.route("/profile", methods=["PUT"])
 @jwt_required()
+@swag_from({
+    'tags': ['Auth'],
+    'summary': 'Update user profile',
+    'security': [{'Bearer': []}],
+    'parameters': [
+        {
+            'name': 'body',
+            'in': 'body',
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'first_name': {'type': 'string'},
+                    'last_name': {'type': 'string'},
+                    'email': {'type': 'string'}
+                }
+            }
+        }
+    ],
+    'responses': {
+        '200': {'description': 'Profile updated'},
+        '400': {'description': 'Email already exists'},
+        '404': {'description': 'User not found'}
+    }
+})
 def update_profile():
     try:
         user_id = int(get_jwt_identity())
@@ -332,6 +446,29 @@ def update_profile():
 @auth_bp.route("/change-password", methods=["POST"])
 @jwt_required()
 @apply_limit("30/hour", key_func=user_id_key_func)
+@swag_from({
+    'tags': ['Auth'],
+    'summary': 'Change user password',
+    'security': [{'Bearer': []}],
+    'parameters': [
+        {
+            'name': 'body',
+            'in': 'body',
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'current_password': {'type': 'string'},
+                    'new_password': {'type': 'string'}
+                },
+                'required': ['current_password', 'new_password']
+            }
+        }
+    ],
+    'responses': {
+        '200': {'description': 'Password changed'},
+        '400': {'description': 'Invalid current password or weak new password'}
+    }
+})
 def change_password():
     try:
         user_id = int(get_jwt_identity())
@@ -373,6 +510,27 @@ def change_password():
 # --------------------------------------------------------------------
 @auth_bp.route("/forgot-password", methods=["POST"])
 @apply_limit("10/hour", key_func=get_remote_address)
+@swag_from({
+    'tags': ['Auth'],
+    'summary': 'Request password reset',
+    'parameters': [
+        {
+            'name': 'body',
+            'in': 'body',
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'email': {'type': 'string'}
+                },
+                'required': ['email']
+            }
+        }
+    ],
+    'responses': {
+        '200': {'description': 'Reset link sent if email exists'},
+        '400': {'description': 'Email required'}
+    }
+})
 def forgot_password():
     try:
         data = request.get_json() or {}
@@ -384,11 +542,7 @@ def forgot_password():
         if user:
             token = PasswordResetToken.generate(user)
             
-            # ✅ FIX: Use environment variable for real production URL
-            # Fallback to localhost only if FRONTEND_URL is missing
             frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:5173")
-            
-            # Prevent double slashes
             if frontend_url.endswith('/'):
                 frontend_url = frontend_url[:-1]
 
@@ -439,14 +593,34 @@ HRMS Team
 # --------------------------------------------------------------------
 @auth_bp.route("/reset-password", methods=["POST"])
 @apply_limit("10/hour", key_func=get_remote_address)
+@swag_from({
+    'tags': ['Auth'],
+    'summary': 'Reset password using token',
+    'parameters': [
+        {
+            'name': 'body',
+            'in': 'body',
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'token': {'type': 'string'},
+                    'new_password': {'type': 'string'}
+                },
+                'required': ['token', 'new_password']
+            }
+        }
+    ],
+    'responses': {
+        '200': {'description': 'Password reset successful'},
+        '400': {'description': 'Invalid/expired token or weak password'}
+    }
+})
 def reset_password():
     try:
         data = request.get_json() or {}
         if not data.get("token") or not data.get("new_password"):
             return jsonify({"error": "Token and new password are required"}), 400
 
-        # Note: If error persists here, check 'src/models/password_reset_token.py'
-        # ensure it also uses datetime.now(timezone.utc)
         reset_token = PasswordResetToken.get_valid(data["token"])
         if not reset_token:
             return jsonify({"error": "Invalid or expired token"}), 400
