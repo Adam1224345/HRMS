@@ -11,81 +11,50 @@ from flasgger import swag_from
 task_bp = Blueprint('task', __name__, url_prefix='/api')
 
 # ===================================================================
-# SWAGGER DOCUMENTATION
-# ===================================================================
-
-get_tasks_docs = {
-    "tags": ["Tasks"],
-    "summary": "Get all tasks (Admin/HR: all, Employee: own)",
-    "parameters": [
-        {"name": "page", "in": "query", "type": "integer", "default": 1},
-        {"name": "per_page", "in": "query", "type": "integer", "default": 10}
-    ],
-    "responses": {"200": {"description": "Paginated tasks"}},
-    "security": [{"bearerAuth": []}]
-}
-
-get_task_docs = {
-    "tags": ["Tasks"],
-    "summary": "Get a specific task",
-    "parameters": [{"name": "task_id", "in": "path", "type": "integer", "required": True}],
-    "responses": {
-        "200": {"description": "Task details"},
-        "403": {"description": "Forbidden"},
-        "404": {"description": "Not found"}
-    },
-    "security": [{"bearerAuth": []}]
-}
-
-create_task_docs = {
-    "tags": ["Tasks"],
-    "summary": "Create a new task (Admin/HR only)",
-    "parameters": [{
-        "name": "body",
-        "in": "body",
-        "required": True,
-        "schema": {
-            "type": "object",
-            "required": ["title", "assigned_to_id"],
-            "properties": {
-                "title": {"type": "string", "example": "Fix login bug"},
-                "description": {"type": "string", "example": "Users can't login"},
-                "priority": {"type": "string", "enum": ["Low", "Medium", "High"], "example": "High"},
-                "due_date": {"type": "string", "format": "date-time", "example": "2025-12-25T17:00:00Z"},
-                "assigned_to_id": {"type": "integer", "example": 7}
-            }
-        }
-    }],
-    "responses": {"201": {"description": "Task created"}, "403": {"description": "Forbidden"}},
-    "security": [{"bearerAuth": []}]
-}
-
-update_task_docs = {
-    "tags": ["Tasks"],
-    "summary": "Update task (Admin/HR: anything, Employee: only status)",
-    "parameters": [
-        {"name": "task_id", "in": "path", "type": "integer", "required": True},
-        {"name": "body", "in": "body", "schema": {"type": "object"}}
-    ],
-    "responses": {"200": {"description": "Updated"}, "403": {"description": "Forbidden"}},
-    "security": [{"bearerAuth": []}]
-}
-
-delete_task_docs = {
-    "tags": ["Tasks"],
-    "summary": "Delete task (Admin/HR only)",
-    "parameters": [{"name": "task_id", "in": "path", "type": "integer", "required": True}],
-    "responses": {"200": {"description": "Deleted"}, "403": {"description": "Forbidden"}},
-    "security": [{"bearerAuth": []}]
-}
-
-# ===================================================================
-# ROUTES
+# SWAGGER DOCUMENTATION & ROUTES
 # ===================================================================
 
 @task_bp.route('/tasks', methods=['GET'])
+@swag_from({
+    'tags': ['Tasks'],
+    'summary': 'Get paginated tasks',
+    'description': 'Admin/HR sees all tasks. Employee sees only assigned tasks.',
+    'parameters': [
+        {
+            'name': 'page',
+            'in': 'query',
+            'type': 'integer',
+            'description': 'Page number (starts at 1)',
+            'default': 1
+        },
+        {
+            'name': 'per_page',
+            'in': 'query',
+            'type': 'integer',
+            'description': 'Number of tasks per page',
+            'default': 10
+        }
+    ],
+    'security': [{'Bearer': []}],
+    'responses': {
+        '200': {
+            'description': 'Paginated list of tasks',
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'tasks': {'type': 'array', 'items': {'type': 'object'}},
+                    'total': {'type': 'integer'},
+                    'page': {'type': 'integer'},
+                    'per_page': {'type': 'integer'},
+                    'pages': {'type': 'integer'}
+                }
+            }
+        },
+        '401': {'description': 'Missing or invalid token'},
+        '403': {'description': 'Forbidden'}
+    }
+})
 @jwt_required()
-@swag_from(get_tasks_docs)
 def get_tasks():
     current_user_id = get_jwt_identity()
     try:
@@ -113,10 +82,24 @@ def get_tasks():
     }), 200
 
 
-@task_bp.route('/tasks/<int:task_id>', methods=['GET'])
+@task_bp.route('/tasks/user/<int:user_id>', methods=['GET'])
+@swag_from({
+    'tags': ['Tasks'],
+    'summary': 'Get all tasks assigned to a specific User',
+    'description': 'Fetch all tasks for a specific user ID. Employees can only view their own ID.',
+    'parameters': [
+        {'name': 'user_id', 'in': 'path', 'type': 'integer', 'required': True, 'description': 'ID of the user to fetch tasks for'}
+    ],
+    'security': [{'Bearer': []}],
+    'responses': {
+        '200': {'description': 'List of tasks for the user'},
+        '401': {'description': 'Unauthorized'},
+        '403': {'description': 'Forbidden'},
+        '404': {'description': 'User not found'}
+    }
+})
 @jwt_required()
-@swag_from(get_task_docs)
-def get_task(task_id):
+def get_tasks_by_user(user_id):
     current_user_id = get_jwt_identity()
     try:
         current_user_id = int(current_user_id)
@@ -124,18 +107,56 @@ def get_task(task_id):
         return jsonify({'error': 'Invalid token'}), 401
 
     user = User.query.options(joinedload(User.roles)).get(current_user_id)
-    task = Task.query.get_or_404(task_id)
+    
+    # Check if target user exists
+    target_user = User.query.get(user_id)
+    if not target_user:
+        return jsonify({'error': 'User not found'}), 404
 
     is_admin_hr = any(r.name in ['Admin', 'HR'] for r in user.roles)
-    if not (is_admin_hr or task.assigned_to_id == current_user_id):
-        return jsonify({'error': 'Forbidden'}), 403
+    
+    # Permission Check: 
+    # Admin/HR can view anyone's tasks. Employee can only view their own.
+    if not (is_admin_hr or user_id == current_user_id):
+        return jsonify({'error': 'Forbidden: You can only view your own tasks'}), 403
 
-    return jsonify(task.to_dict()), 200
+    # Fetch all tasks for this user
+    tasks = Task.query.filter_by(assigned_to_id=user_id).all()
+
+    return jsonify([t.to_dict() for t in tasks]), 200
 
 
 @task_bp.route('/tasks', methods=['POST'])
+@swag_from({
+    'tags': ['Tasks'],
+    'summary': 'Create new task (Admin/HR only)',
+    'parameters': [
+        {
+            'name': 'body',
+            'in': 'body',
+            'required': True,
+            'schema': {
+                'type': 'object',
+                'required': ['title', 'assigned_to_id'],
+                'properties': {
+                    'title': {'type': 'string'},
+                    'description': {'type': 'string'},
+                    'priority': {'type': 'string', 'enum': ['Low', 'Medium', 'High']},
+                    'due_date': {'type': 'string', 'format': 'date-time'},
+                    'assigned_to_id': {'type': 'integer'}
+                }
+            }
+        }
+    ],
+    'security': [{'Bearer': []}],
+    'responses': {
+        '201': {'description': 'Task created'},
+        '400': {'description': 'Validation error'},
+        '401': {'description': 'Unauthorized'},
+        '403': {'description': 'Forbidden'}
+    }
+})
 @jwt_required()
-@swag_from(create_task_docs)
 def create_task():
     current_user_id = get_jwt_identity()
     try:
@@ -182,7 +203,6 @@ def create_task():
     db.session.add(task)
     db.session.flush()
 
-    # Notify employee
     send_notification(
         recipient_id=assigned_to_id,
         message=f"New task: {task.title}",
@@ -205,8 +225,37 @@ def create_task():
 
 
 @task_bp.route('/tasks/<int:task_id>', methods=['PUT'])
+@swag_from({
+    'tags': ['Tasks'],
+    'summary': 'Update task (Admin/HR full, Employee status only)',
+    'parameters': [
+        {'name': 'task_id', 'in': 'path', 'type': 'integer', 'required': True},
+        {
+            'name': 'body',
+            'in': 'body',
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'title': {'type': 'string'},
+                    'description': {'type': 'string'},
+                    'priority': {'type': 'string', 'enum': ['Low', 'Medium', 'High']},
+                    'due_date': {'type': 'string', 'format': 'date-time'},
+                    'assigned_to_id': {'type': 'integer'},
+                    'status': {'type': 'string', 'enum': ['Pending', 'In Progress', 'Completed']}
+                }
+            }
+        }
+    ],
+    'security': [{'Bearer': []}],
+    'responses': {
+        '200': {'description': 'Task updated'},
+        '400': {'description': 'Validation error'},
+        '401': {'description': 'Unauthorized'},
+        '403': {'description': 'Forbidden'},
+        '404': {'description': 'Not found'}
+    }
+})
 @jwt_required()
-@swag_from(update_task_docs)
 def update_task(task_id):
     current_user_id = get_jwt_identity()
     try:
@@ -231,7 +280,6 @@ def update_task(task_id):
     old_status = task.status
     old_assignee = task.assigned_to_id
 
-    # Admin/HR can update everything
     if is_admin_hr:
         for field in ['title', 'description', 'priority', 'due_date', 'assigned_to_id', 'status']:
             if field in data:
@@ -252,7 +300,6 @@ def update_task(task_id):
                     changes.append(field)
                 setattr(task, field, value)
 
-    # Employee can only update status
     if not is_admin_hr and is_assignee:
         if not data.get('status'):
             return jsonify({'error': 'status is required'}), 400
@@ -264,10 +311,8 @@ def update_task(task_id):
 
     db.session.commit()
 
-    # NOTIFICATIONS
     if 'status' in changes and task.status == 'Completed':
         completer = user.username or user.email or "Employee"
-        # Notify creator
         if task.assigned_by_id and task.assigned_by_id != current_user_id:
             send_notification(
                 recipient_id=task.assigned_by_id,
@@ -277,7 +322,6 @@ def update_task(task_id):
                 sender_id=current_user_id,
                 send_email=True
             )
-        # Notify all Admin/HR
         for admin in User.query.join(User.roles).filter(Role.name.in_(['Admin', 'HR'])).all():
             if admin.id not in (current_user_id, task.assigned_by_id):
                 send_notification(
@@ -310,10 +354,23 @@ def update_task(task_id):
     return jsonify(task.to_dict()), 200
 
 
-@task_bp.route('/tasks/<int:task_id>', methods=['DELETE'])
+@task_bp.route('/tasks/user/<int:user_id>', methods=['DELETE'])
+@swag_from({
+    'tags': ['Tasks'],
+    'summary': 'Delete all tasks assigned to a specific User (Admin/HR only)',
+    'parameters': [
+        {'name': 'user_id', 'in': 'path', 'type': 'integer', 'required': True, 'description': 'ID of the user whose tasks will be deleted'}
+    ],
+    'security': [{'Bearer': []}],
+    'responses': {
+        '200': {'description': 'All tasks for the user deleted'},
+        '401': {'description': 'Unauthorized'},
+        '403': {'description': 'Forbidden'},
+        '404': {'description': 'User not found or no tasks'}
+    }
+})
 @jwt_required()
-@swag_from(delete_task_docs)
-def delete_task(task_id):
+def delete_tasks_by_user(user_id):
     current_user_id = get_jwt_identity()
     try:
         current_user_id = int(current_user_id)
@@ -321,20 +378,30 @@ def delete_task(task_id):
         return jsonify({'error': 'Invalid token'}), 401
 
     user = User.query.options(joinedload(User.roles)).get(current_user_id)
+    
+    # Validation: Only Admin/HR can delete
     if not user or not any(r.name in ['Admin', 'HR'] for r in user.roles):
-        return jsonify({'error': 'Only Admin/HR can delete'}), 403
+        return jsonify({'error': 'Only Admin/HR can delete tasks'}), 403
 
-    task = Task.query.get_or_404(task_id)
+    # Check if tasks exist for this user
+    tasks = Task.query.filter_by(assigned_to_id=user_id).all()
     
+    if not tasks:
+        return jsonify({'message': 'No tasks found for this user'}), 404
+
+    deleted_count = 0
     
-    log_audit_event(
-        user_id=current_user_id,
-        action='TASK_DELETED',
-        resource_type='Task',
-        resource_id=task.id,
-        details={'title': task.title}
-    )
+    for task in tasks:
+        # Log Audit Event for each deleted task
+        log_audit_event(
+            user_id=current_user_id,
+            action='TASK_DELETED_BY_ADMIN',
+            resource_type='Task',
+            resource_id=task.id,
+            details={'title': task.title, 'owner_user_id': user_id}
+        )
+        db.session.delete(task)
+        deleted_count += 1
     
-    db.session.delete(task)
     db.session.commit()
-    return jsonify({'message': 'Task deleted'}), 200
+    return jsonify({'message': f'Successfully deleted {deleted_count} tasks for user {user_id}'}), 200
