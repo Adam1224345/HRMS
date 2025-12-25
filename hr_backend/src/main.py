@@ -10,6 +10,7 @@ from flask_socketio import SocketIO
 from flask_mail import Mail
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flasgger import Swagger
 
 # This file is at: hr_backend/src/main.py
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -76,6 +77,7 @@ from src.models.notification import Notification
 from src.models.document import Document
 from src.models.password_reset_token import PasswordResetToken
 from src.models.refresh_token import RefreshToken 
+
 # ---------------------------------------------------
 # EXTENSIONS INIT
 # ---------------------------------------------------
@@ -88,6 +90,54 @@ limiter.init_app(app)
 jwt = JWTManager(app)
 
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+# ---------------------------------------------------
+# SWAGGER / API DOCS SETUP (Flasgger) with HTTP & HTTPS schemes
+# ---------------------------------------------------
+swagger_config = {
+    "headers": [],
+    "specs": [
+        {
+            "endpoint": "apispec",
+            "route": "/apispec.json",
+            "rule_filter": lambda rule: True,
+            "model_filter": lambda tag: True,
+        }
+    ],
+    "static_url_path": "/flasgger_static",
+    "swagger_ui": True,
+    "specs_route": "/apidocs/",
+    "title": "HRMS API Documentation",
+    "version": "1.0.0",
+    "description": "Interactive API documentation for HR Management System",
+    "termsOfService": "",
+    "contact": {
+        "name": "HRMS Support",
+        "url": "https://your-company.com/support",
+        "email": "support@hrms.com"
+    },
+    "license": {
+        "name": "MIT",
+        "url": "https://opensource.org/licenses/MIT"
+    },
+    # Show both HTTP and HTTPS schemes in Swagger UI
+    "schemes": ["http", "https"],
+    "securityDefinitions": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "description": "JWT Authorization header using the Bearer scheme. Example: 'Authorization: Bearer {token}'"
+        }
+    },
+    "security": [
+        {
+            "Bearer": []
+        }
+    ]
+}
+
+swagger = Swagger(app, config=swagger_config)
 
 # ---------------------------------------------------
 # BABEL
@@ -180,6 +230,7 @@ if __name__ == "__main__":
     print(" HRMS Backend Starting…")
     print(" Using Neon PostgreSQL")
     print(" Static Folder:", STATIC_FOLDER)
+    print(" Swagger Docs: http://localhost:5000/apidocs/")
     print("────────────────────────────────────────────")
 
     socketio.run(app, host="0.0.0.0", port=5000, debug=False)
