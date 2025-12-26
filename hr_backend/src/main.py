@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()  
+
 import os
 import sys
 from dotenv import load_dotenv
@@ -19,7 +22,7 @@ STATIC_FOLDER = os.path.join(BASE_DIR, "static")
 
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
-# allow absolute imports (src.models, src.routes, etc.)
+# allow absolute imports
 sys.path.insert(0, PROJECT_ROOT)
 
 # ---------------------------------------------------
@@ -79,9 +82,17 @@ from src.models.password_reset_token import PasswordResetToken
 from src.models.refresh_token import RefreshToken 
 
 # ---------------------------------------------------
-# EXTENSIONS INIT
+# EXTENSIONS INIT - CRITICAL FIXES
 # ---------------------------------------------------
-socketio = SocketIO(app, cors_allowed_origins="*") 
+socketio = SocketIO(
+    app,
+    cors_allowed_origins=["http://localhost:5173", "http://127.0.0.1:5173", "*"],
+    async_mode='eventlet',          # Windows + stability ke liye zaroori
+    logger=True,                    # Debug logs
+    engineio_logger=True,
+    ping_timeout=120,               # Long timeout
+    ping_interval=25                # Frequent pings to prevent idle drop
+)
 
 mail = Mail(app)
 bcrypt.init_app(app)
@@ -92,7 +103,7 @@ jwt = JWTManager(app)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 # ---------------------------------------------------
-# SWAGGER / API DOCS SETUP (Flasgger) with HTTP & HTTPS schemes
+# SWAGGER / API DOCS SETUP
 # ---------------------------------------------------
 swagger_config = {
     "headers": [],
@@ -110,17 +121,6 @@ swagger_config = {
     "title": "HRMS API Documentation",
     "version": "1.0.0",
     "description": "Interactive API documentation for HR Management System",
-    "termsOfService": "",
-    "contact": {
-        "name": "HRMS Support",
-        "url": "https://your-company.com/support",
-        "email": "support@hrms.com"
-    },
-    "license": {
-        "name": "MIT",
-        "url": "https://opensource.org/licenses/MIT"
-    },
-    # Show both HTTP and HTTPS schemes in Swagger UI
     "schemes": ["http", "https"],
     "securityDefinitions": {
         "Bearer": {
@@ -130,11 +130,7 @@ swagger_config = {
             "description": "JWT Authorization header using the Bearer scheme. Example: 'Authorization: Bearer {token}'"
         }
     },
-    "security": [
-        {
-            "Bearer": []
-        }
-    ]
+    "security": [{"Bearer": []}]
 }
 
 swagger = Swagger(app, config=swagger_config)
@@ -146,10 +142,8 @@ def get_locale():
     lang = request.args.get('lang')
     if lang in app.config['LANGUAGES']:
         return lang
-
     if "lang" in session and session["lang"] in app.config["LANGUAGES"]:
         return session["lang"]
-
     return request.accept_languages.best_match(app.config["LANGUAGES"])
 
 babel = Babel(app, locale_selector=get_locale)
@@ -172,7 +166,7 @@ from src.socket_events import setup_socket_events
 setup_socket_events(socketio)
 
 # ---------------------------------------------------
-# BLUEPRINTS - IMPORT AFTER MODELS (Important!)
+# BLUEPRINTS
 # ---------------------------------------------------
 from src.routes.user import user_bp
 from src.routes.auth import auth_bp
@@ -190,7 +184,6 @@ try:
 except:
     task_bp = None
 
-# Register blueprints
 app.register_blueprint(auth_bp, url_prefix="/api/auth")
 app.register_blueprint(user_bp, url_prefix="/api")
 app.register_blueprint(role_bp, url_prefix="/api")
@@ -200,7 +193,7 @@ app.register_blueprint(calendar_bp, url_prefix="/api")
 app.register_blueprint(audit_log_bp, url_prefix="/api")
 app.register_blueprint(notification_bp, url_prefix="/api")
 app.register_blueprint(lang_bp, url_prefix="/api")
-app.register_blueprint(document_bp)  # Defined in document.py as /api/documents
+app.register_blueprint(document_bp)
 
 if task_bp:
     app.register_blueprint(task_bp, url_prefix="/api")
@@ -227,10 +220,9 @@ def serve_frontend(path):
 # ---------------------------------------------------
 if __name__ == "__main__":
     print("────────────────────────────────────────────")
-    print(" HRMS Backend Starting…")
+    print(" HRMS Backend Starting (Eventlet Mode - Fixed)")
     print(" Using Neon PostgreSQL")
     print(" Static Folder:", STATIC_FOLDER)
     print(" Swagger Docs: http://localhost:5000/apidocs/")
     print("────────────────────────────────────────────")
-
     socketio.run(app, host="0.0.0.0", port=5000, debug=False)
