@@ -1,32 +1,27 @@
-# src/routes/document.py
-
 import os
 import uuid
-from flask import Blueprint, request, jsonify, send_from_directory
+import requests  # Required for proxying
+from flask import Blueprint, request, jsonify, Response, stream_with_context
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from src.models.document import Document
 from src.models.user import User, Role, db
 from src.models.leave import Leave
 from datetime import datetime
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 
 document_bp = Blueprint('document', __name__, url_prefix='/api/documents')
 
 # ──────────────────────────────────────────────────────────────
-# Smart Upload Folder - Works on Local AND Vercel
+# CLOUDINARY CONFIGURATION
 # ──────────────────────────────────────────────────────────────
-current_dir = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(current_dir, '..', '..'))
-
-# Use /tmp on Vercel (writable), use project folder on local
-if os.getenv('VERCEL') or os.getenv('SERVERLESS'):  # Vercel or similar serverless
-    UPLOAD_FOLDER = '/tmp/uploads/documents'
-    print("RUNNING ON SERVERLESS (Vercel) - Using /tmp for uploads")
-else:
-    UPLOAD_FOLDER = os.path.join(PROJECT_ROOT, 'uploads', 'documents')
-    print(f"RUNNING LOCALLY - Using {UPLOAD_FOLDER}")
-
-# Create folder (safe)
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+cloudinary.config( 
+  cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME'), 
+  api_key = os.getenv('CLOUDINARY_API_KEY'), 
+  api_secret = os.getenv('CLOUDINARY_API_SECRET'),
+  secure = True
+)
 
 ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx', 'txt'}
 
@@ -34,7 +29,7 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # ──────────────────────────────────────────────────────────────
-# Upload Document
+# Upload Document (Same as before)
 # ──────────────────────────────────────────────────────────────
 @document_bp.route('/upload', methods=['POST'])
 @jwt_required()
@@ -55,23 +50,20 @@ def upload_document():
         if not allowed_file(file.filename):
             return jsonify({"error": "File type not allowed"}), 400
 
-        ext = file.filename.rsplit('.', 1)[1].lower()
-        secure_filename = f"{uuid.uuid4().hex}_{user_id}_{int(datetime.utcnow().timestamp())}.{ext}"
+        # Upload to Cloudinary
+        upload_result = cloudinary.uploader.upload(
+            file, 
+            resource_type = "auto", 
+            folder = "hrms_documents"
+        )
         
-        # On Vercel: files in /tmp disappear after request → we skip saving
-        if os.getenv('VERCEL') or os.getenv('SERVERLESS'):
-            print("SERVERLESS MODE: Skipping file save (read-only FS). Saving metadata only.")
-            file_path = f"/tmp/{secure_filename}"  # fake path for DB
-        else:
-            file_path = os.path.join(UPLOAD_FOLDER, secure_filename)
-            file.save(file_path)
-            print(f"File saved locally: {file_path}")
+        file_url = upload_result.get('secure_url')
+        public_id = upload_result.get('public_id')
 
-        # Always save metadata to DB
         document = Document(
-            filename=secure_filename,
+            filename=public_id,
             original_name=file.filename,
-            file_path=file_path,
+            file_path=file_url,
             file_type=file.content_type,
             purpose=purpose,
             uploaded_by=user_id,
@@ -88,10 +80,10 @@ def upload_document():
     except Exception as e:
         print(f"ERROR Uploading: {e}")
         db.session.rollback()
-        return jsonify({"error": "Server error during upload"}), 500
+        return jsonify({"error": f"Upload failed: {str(e)}"}), 500
 
 # ──────────────────────────────────────────────────────────────
-# Download Document - Works on local, returns message on Vercel
+# Download Document (FIX: PROXY MODE)
 # ──────────────────────────────────────────────────────────────
 @document_bp.route('/download/<int:doc_id>', methods=['GET'])
 @jwt_required()
@@ -100,6 +92,7 @@ def download_document(doc_id):
         user_id = get_jwt_identity()
         doc = Document.query.get_or_404(doc_id)
         
+        # Check Permissions
         current_user = User.query.options(db.joinedload(User.roles)).get(user_id)
         is_admin_hr = any(r.name in ['Admin', 'HR'] for r in current_user.roles)
         is_uploader = (doc.uploaded_by == int(user_id))
@@ -113,22 +106,26 @@ def download_document(doc_id):
         if not (is_uploader or is_admin_hr or is_leave_owner):
             return jsonify({"error": "Unauthorized"}), 403
 
-        # On Vercel: file not persisted
-        if os.getenv('VERCEL') or os.getenv('SERVERLESS'):
-            return jsonify({
-                "message": "File download not available on Vercel (serverless)",
-                "original_name": doc.original_name,
-                "note": "Use cloud storage (S3/Cloudinary) for production file persistence"
-            }), 200
-
-        if not os.path.exists(doc.file_path):
-            return jsonify({"error": "File not found on server"}), 404
+        # ✅ MAGIC FIX: Backend fetches file from Cloudinary and streams to Frontend
+        # Frontend sees a regular file download from YOUR server, not Cloudinary
         
-        return send_from_directory(
-            os.path.dirname(doc.file_path),
-            os.path.basename(doc.file_path),
-            as_attachment=True,
-            download_name=doc.original_name
+        # 1. Fetch file stream from Cloudinary
+        cloudinary_res = requests.get(doc.file_path, stream=True)
+        
+        if cloudinary_res.status_code != 200:
+            return jsonify({"error": "Could not fetch file from cloud"}), 502
+
+        # 2. Stream it back to user
+        headers = {
+            'Content-Disposition': f'attachment; filename="{doc.original_name}"',
+            'Content-Type': cloudinary_res.headers.get('Content-Type', 'application/octet-stream'),
+            'Content-Length': cloudinary_res.headers.get('Content-Length')
+        }
+
+        return Response(
+            stream_with_context(cloudinary_res.iter_content(chunk_size=8192)),
+            headers=headers,
+            status=200
         )
 
     except Exception as e:
