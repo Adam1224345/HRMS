@@ -52,161 +52,145 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 
 dayjs.extend(relativeTime);
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-const API_BASE = `${API_BASE_URL}/api`;
-const SOCKET_BASE = API_BASE_URL;
+const isDev = import.meta.env ? import.meta.env.MODE === 'development' : process.env.NODE_ENV === 'development';
 
-// --- FIXED REAL-TIME NOTIFICATION BELL (Instant, No Refresh Needed) ---
+if (!axios.defaults.baseURL) {
+  axios.defaults.baseURL = isDev ? 'http://localhost:5000/api' : '/api';
+}
+
+const SOCKET_BASE = isDev ? 'http://localhost:5000' : undefined;
+
+// --- FIXED NOTIFICATION BELL (Hybrid: Socket + Auto-Polling) ---
 const NotificationBell = ({ userId, userRoles }) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const dropdownRef = useRef(null);
+  
+  // Sound Settings
   const [soundEnabled, setSoundEnabled] = useState(localStorage.getItem('soundEnabled') !== 'false');
+  const soundEnabledRef = useRef(soundEnabled);
+  const audioRef = useRef(new Audio('/sounds/notification.mp3')); 
 
   const isAdminOrHR = userRoles?.some(r => r.name === 'Admin' || r.name === 'HR') || false;
 
   useEffect(() => {
     localStorage.setItem('soundEnabled', soundEnabled);
+    soundEnabledRef.current = soundEnabled;
   }, [soundEnabled]);
 
+  // --- 1. FETCH FUNCTION (Uses Global Axios Defaults) ---
+  const fetchNotifications = async (playAudio = false) => {
+    if (!userId) return;
+    try {
+      const token = localStorage.getItem('token');
+      // Just use '/notifications' - Axios global baseURL handles the rest
+      const res = await axios.get('/notifications', {
+        headers: { Authorization: `Bearer ${token}`, 'X-Fetch-All': isAdminOrHR ? 'true' : 'false' }
+      });
+      
+      const notifs = res.data || [];
+      const newUnreadCount = notifs.filter(n => !n.is_read).length;
+
+      // Play sound if new unread items appear
+      setUnreadCount(prev => {
+        if (playAudio && newUnreadCount > prev && soundEnabledRef.current) {
+           audioRef.current.play().catch(e => {}); 
+        }
+        return newUnreadCount;
+      });
+
+      setNotifications(notifs);
+
+    } catch (err) {
+      console.error('Fetch error:', err);
+    }
+  };
+
+  // --- 2. AUTO-POLLING (Backup for Vercel) ---
+  // Guaranteed updates every 3 seconds even if Socket fails
+  useEffect(() => {
+    fetchNotifications(false); // Initial load
+
+    const intervalId = setInterval(() => {
+      fetchNotifications(true); // Auto-check
+    }, 3000); 
+
+    return () => clearInterval(intervalId);
+  }, [userId, isAdminOrHR]);
+
+  // --- 3. SOCKET CONNECTION (Real-time Layer) ---
   useEffect(() => {
     if (!userId) return;
 
-    const token = localStorage.getItem('token');
-
-    // Fetch notifications function
-    const fetchNotifications = async () => {
-      try {
-        const res = await axios.get(`${API_BASE}/notifications`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'X-Fetch-All': isAdminOrHR ? 'true' : 'false'
-          }
-        });
-        const notifs = res.data || [];
-        setNotifications(notifs);
-        setUnreadCount(notifs.filter(n => !n.is_read).length);
-        console.log('Notifications refreshed:', notifs.length);
-      } catch (err) {
-        console.error('Failed to fetch notifications:', err);
-      }
-    };
-
-    // Initial fetch
-    fetchNotifications();
-
-    // Socket.IO - Stable, with fallback and aggressive reconnect
     const socket = io(SOCKET_BASE, {
+      path: '/socket.io', // Critical for Vercel/Flask routing
+      transports: ['websocket', 'polling'], 
       withCredentials: true,
-      transports: ['websocket', 'polling'], // Fallback to polling if WebSocket fails
       reconnection: true,
-      reconnectionAttempts: Infinity, // Keep trying forever
-      reconnectionDelay: 500,         // Fast retry
-      reconnectionDelayMax: 2000,
-      randomizationFactor: 0.5,
-      timeout: 15000,
-      autoConnect: true,
-      forceNew: true
+      reconnectionAttempts: Infinity,
     });
 
     socket.on('connect', () => {
-      console.log('✅ Socket connected successfully! Joining room...');
+      console.log('✅ Socket Connected');
       socket.emit('join', { user_id: userId, is_admin_or_hr: isAdminOrHR });
-      fetchNotifications(); // Refresh on every connect/reconnect
     });
 
     socket.on('new_notification', (notif) => {
-      console.log('🔔 New live notification:', notif);
+      // Real-time push logic
       if (notif.user_id === userId || isAdminOrHR) {
-        setNotifications(prev => [notif, ...prev]);
+        setNotifications(prev => {
+            // Prevent duplicate if Polling already caught it
+            if (prev.some(n => n.id === notif.id)) return prev;
+            return [notif, ...prev];
+        });
         setUnreadCount(prev => prev + 1);
-        if (soundEnabled) {
-          new Audio('/sounds/notification.mp3').play().catch(() => {});
+        
+        if (soundEnabledRef.current) {
+          audioRef.current.play().catch(() => {});
         }
       }
     });
 
-    socket.on('connect_error', (err) => {
-      console.error('Socket connection error:', err.message);
-    });
+    return () => socket.disconnect();
+  }, [userId, isAdminOrHR]); 
 
-    socket.on('disconnect', (reason) => {
-      console.log('Socket disconnected:', reason);
-    });
-
-    // Ping every 5 seconds to keep connection alive
-    const pingInterval = setInterval(() => {
-      if (socket.connected) {
-        socket.emit('ping');
-      }
-    }, 5000);
-
-    // Extra: Refresh when tab becomes visible again
-    const visibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        fetchNotifications();
-      }
-    };
-    document.addEventListener('visibilitychange', visibilityChange);
-
-    return () => {
-      clearInterval(pingInterval);
-      document.removeEventListener('visibilitychange', visibilityChange);
-      socket.disconnect();
-    };
-  }, [userId, isAdminOrHR, soundEnabled]);
-
+  // Dropdown Logic
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setOpen(false);
-      }
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // API Actions
   const markAsRead = async (id) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.put(`${API_BASE}/notifications/${id}/read`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await axios.put(`/notifications/${id}/read`, {}, { headers: { Authorization: `Bearer ${token}` } });
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
       setUnreadCount(prev => Math.max(0, prev - 1));
-    } catch (error) {
-      console.error('Failed to mark as read:', error);
-    }
+    } catch (error) { console.error(error); }
   };
 
   const markAllAsRead = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.put(`${API_BASE}/notifications/read-all`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await axios.put(`/notifications/read-all`, {}, { headers: { Authorization: `Bearer ${token}` } });
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
       setUnreadCount(0);
-    } catch (error) {
-      console.error('Failed to mark all as read:', error);
-    }
+    } catch (error) { console.error(error); }
   };
 
   const clearAllNotifications = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`${API_BASE}/notifications`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await axios.delete(`/notifications`, { headers: { Authorization: `Bearer ${token}` } });
       setNotifications([]);
       setUnreadCount(0);
-    } catch (error) {
-      console.error('Failed to clear notifications:', error);
-      setNotifications([]);
-      setUnreadCount(0);
-    }
+    } catch (error) { setNotifications([]); setUnreadCount(0); }
   };
 
   return (
@@ -224,39 +208,24 @@ const NotificationBell = ({ userId, userRoles }) => {
         )}
       </Button>
 
+      {/* --- RESPONSIVE DROPDOWN --- */}
       {open && (
-        <div
+        <div 
           className="absolute right-0 sm:right-0 mt-2 z-50 origin-top-right rounded-xl border border-blue-100 bg-card text-card-foreground shadow-xl outline-none animate-in fade-in zoom-in-95 duration-200"
-          style={{
-            width: 'calc(100vw - 2rem)',
-            maxWidth: '384px',
-            marginRight: '0px'
-          }}
+          style={{ width: 'calc(100vw - 2rem)', maxWidth: '384px', marginRight: '0px' }}
         >
           <div className="flex items-center justify-between p-4 border-b border-blue-100 bg-gradient-to-r from-blue-50 to-white rounded-t-xl">
             <div>
               <h3 className="font-semibold leading-none tracking-tight text-blue-900">{t('notifications_header')}</h3>
-              <p className="text-xs text-blue-600/80 mt-1">
-                {unreadCount} {t('unread')}
-              </p>
+              <p className="text-xs text-blue-600/80 mt-1">{unreadCount} {t('unread')}</p>
             </div>
             <div className="flex gap-2">
               {unreadCount > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={markAllAsRead}
-                  className="h-8 px-2 text-xs font-medium text-blue-600 hover:bg-blue-100"
-                >
-                  {t('mark_all_read')}
+                <Button variant="ghost" size="sm" onClick={markAllAsRead} className="h-8 px-2 text-xs font-medium text-blue-600 hover:bg-blue-100">
+                    {t('mark_all_read')}
                 </Button>
               )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={clearAllNotifications}
-                className="h-8 px-2 text-xs text-muted-foreground hover:text-destructive"
-              >
+              <Button variant="ghost" size="sm" onClick={clearAllNotifications} className="h-8 px-2 text-xs text-muted-foreground hover:text-destructive">
                 {t('clear_all')}
               </Button>
             </div>
@@ -271,30 +240,13 @@ const NotificationBell = ({ userId, userRoles }) => {
             ) : (
               <div className="grid gap-0">
                 {notifications.map((not, i) => (
-                  <div
-                    key={not.id || i}
-                    className={`
-                      relative flex gap-4 p-4 transition-colors hover:bg-blue-50/50 border-b border-border/50 last:border-0
-                      ${!not.is_read ? 'bg-blue-50/80' : ''}
-                    `}
-                  >
+                  <div key={not.id || i} className={`relative flex gap-4 p-4 transition-colors hover:bg-blue-50/50 border-b border-border/50 last:border-0 ${!not.is_read ? 'bg-blue-50/80' : ''}`}>
                     <div className="flex-1 space-y-1">
-                      <p
-                        className={`text-sm leading-snug ${!not.is_read ? 'font-medium text-blue-900' : 'text-muted-foreground'}`}
-                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(not.message) }}
-                      />
-                      <p className="text-xs text-blue-400">
-                        {dayjs(not.timestamp).fromNow()}
-                      </p>
+                      <p className={`text-sm leading-snug ${!not.is_read ? 'font-medium text-blue-900' : 'text-muted-foreground'}`} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(not.message) }} />
+                      <p className="text-xs text-blue-400">{dayjs(not.timestamp).fromNow()}</p>
                     </div>
                     {!not.is_read && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 shrink-0 text-blue-600 opacity-70 hover:opacity-100 hover:bg-blue-100"
-                        onClick={(e) => { e.stopPropagation(); markAsRead(not.id); }}
-                        title={t('mark_as_read')}
-                      >
+                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-blue-600 opacity-70 hover:opacity-100 hover:bg-blue-100" onClick={(e) => { e.stopPropagation(); markAsRead(not.id); }} title={t('mark_as_read')}>
                         <Check className="h-4 w-4" />
                       </Button>
                     )}
@@ -321,14 +273,13 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// --- MAIN DASHBOARD (Unchanged) ---
+// --- MAIN DASHBOARD (Full Navigation) ---
 const Dashboard = () => {
   const { t } = useTranslation();
   const { user, logout, hasPermission, hasRole } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
 
   const handleLogout = async () => await logout();
-
   const getInitials = (f, l) => `${f?.charAt(0) || ''}${l?.charAt(0) || ''}`.toUpperCase();
 
   const navigationItems = [
@@ -337,9 +288,9 @@ const Dashboard = () => {
     { id: 'roles', label: t('role_management'), icon: Shield, show: hasPermission('role_read') },
     { id: 'tasks', label: t('task_management'), icon: ClipboardList, show: hasPermission('task_read') },
     { id: 'leaves', label: t('leave_management'), icon: CalendarCheck, show: hasPermission('leave_read') },
-    { id: 'calendar', label: t('calendar_view'), icon: Calendar, show: hasPermission('leave_read') || hasPermission('task_read') },
-    { id: 'employee-self-service', label: t('employee_self_service'), icon: FileText, show: hasRole('Employee') },
-    { id: 'audit-logs', label: t('audit_logs'), icon: ScrollText, show: hasRole('Admin') || hasRole('HR') },
+   { id: 'calendar', label: t('calendar_view'), icon: Calendar, show: hasPermission('leave_read') || hasPermission('task_read') },
+   { id: 'employee-self-service',label: t('employee_self_service'),icon: FileText,show: hasRole('Employee')},
+   { id: 'audit-logs', label: t('audit_logs'), icon: ScrollText, show: hasRole('Admin') || hasRole('HR') },
     { id: 'profile', label: t('profile_settings'), icon: Settings, show: true }
   ];
 
@@ -354,7 +305,7 @@ const Dashboard = () => {
       case 'tasks': return <ErrorBoundary><TaskManagement /></ErrorBoundary>;
       case 'leaves': return <ErrorBoundary><LeaveManagement /></ErrorBoundary>;
       case 'calendar': return <ErrorBoundary><CalendarView /></ErrorBoundary>;
-      case 'employee-self-service': return <ErrorBoundary><EmployeeSelfService /></ErrorBoundary>;
+      case 'employee-self-service':return (<ErrorBoundary><EmployeeSelfService /></ErrorBoundary>);
       case 'audit-logs': return <ErrorBoundary><AuditLogView /></ErrorBoundary>;
       case 'profile': return <ErrorBoundary><ProfileSettings /></ErrorBoundary>;
       default:
@@ -407,7 +358,7 @@ const Dashboard = () => {
           <SidebarMenu>
             {visibleNavItems.map((item) => (
               <SidebarMenuItem key={item.id}>
-                <SidebarMenuButton
+                <SidebarMenuButton 
                   onClick={() => setActiveTab(item.id)}
                   isActive={activeTab === item.id}
                   tooltip={item.label}
@@ -438,8 +389,8 @@ const Dashboard = () => {
             </SidebarMenuItem>
             <SidebarSeparator className="bg-sidebar-border/50" />
             <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={handleLogout}
+              <SidebarMenuButton 
+                onClick={handleLogout} 
                 tooltip={t('sign_out')}
                 className="text-destructive hover:bg-destructive/10 hover:text-destructive transition-colors h-10"
               >
@@ -457,12 +408,12 @@ const Dashboard = () => {
             <SidebarTrigger className="-ml-1 h-9 w-9 text-blue-600 hover:bg-blue-50 hover:text-blue-700" />
             <div className="hidden md:block h-6 w-px bg-blue-200 mx-2" />
             <h1 className="text-sm font-semibold md:text-lg text-blue-900 tracking-tight">
-              {navigationItems.find(i => i.id === activeTab)?.label}
+               {navigationItems.find(i => i.id === activeTab)?.label}
             </h1>
           </div>
           <div className="ml-auto flex items-center gap-3 md:gap-4">
             <span className="hidden text-xs text-blue-900/60 sm:inline-block font-medium">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              {new Date().toLocaleDateString(user?.locale || 'en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </span>
             <LanguageToggle />
             <NotificationBell userId={user?.id} userRoles={user?.roles} />
@@ -471,7 +422,7 @@ const Dashboard = () => {
 
         <main className="flex-1 overflow-x-hidden p-4 md:p-6 lg:p-8 bg-blue-50/10">
           <div className="mx-auto max-w-7xl animate-in fade-in slide-in-from-bottom-2 duration-500">
-            {renderContent()}
+             {renderContent()}
           </div>
         </main>
       </SidebarInset>
