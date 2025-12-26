@@ -7,7 +7,8 @@ class Document(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(255), nullable=False)    
     original_name = db.Column(db.String(255), nullable=False)     
-    file_path = db.Column(db.String(500), nullable=False) # Reverted to original size
+    # Cloudinary URLs can be long, so String(500) is good
+    file_path = db.Column(db.String(500), nullable=False) 
     file_type = db.Column(db.String(100), nullable=False)
     purpose = db.Column(db.String(100), default='general')         
     uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -25,7 +26,7 @@ class Document(db.Model):
             "purpose": self.purpose,
             "file_type": self.file_type,
             "uploaded_at": self.uploaded_at.isoformat() + 'Z',
-            # This URL matches the route in the routes file
+            # This URL points to your backend route which handles the redirect
             "download_url": f"/api/documents/download/{self.id}",
             "uploader": {
                 "id": self.uploader.id,
