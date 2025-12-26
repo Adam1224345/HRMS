@@ -27,3 +27,5 @@ limits==2.7.0
 python-dotenv==1.2.1
 Flask-Babel==4.0.0
 eventlet==0.35.2
+cloudinary
+requests
