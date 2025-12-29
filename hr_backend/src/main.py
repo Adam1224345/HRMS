@@ -120,6 +120,11 @@ swagger_config = {
         "name": "MIT",
         "url": "https://opensource.org/licenses/MIT"
     },
+    
+    "ui_params": {
+        "defaultModelsExpandDepth": -1
+    },
+
     # Show both HTTP and HTTPS schemes in Swagger UI
     "schemes": ["http", "https"],
     "securityDefinitions": {
@@ -233,4 +238,4 @@ if __name__ == "__main__":
     print(" Swagger Docs: http://localhost:5000/apidocs/")
     print("────────────────────────────────────────────")
 
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+    socketio.run(app, host="0.0.0.0", port=5000, debug=False)
