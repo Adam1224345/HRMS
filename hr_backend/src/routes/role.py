@@ -7,7 +7,7 @@ role_bp = Blueprint('role', __name__)
 
 def optional_jwt_required(func):
     """
-    JWT check  (for Swagger/cURL testing)
+    JWT check (for Swagger/cURL testing)
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -22,8 +22,8 @@ def require_permission(permission_name):
         @optional_jwt_required  
         def decorated_function(*args, **kwargs):
             if current_app.config.get("DEBUG", False):
-                
                 return f(*args, **kwargs)
+            
             user_id = int(get_jwt_identity())
             user = User.query.get(user_id)
 
@@ -45,6 +45,8 @@ def get_roles():
     ---
     tags:
       - Roles
+    security:
+      - Bearer: []
     responses:
       200:
         description: List of roles retrieved successfully
@@ -68,6 +70,8 @@ def create_role():
     ---
     tags:
       - Roles
+    security:
+      - Bearer: []
     parameters:
       - in: body
         name: body
@@ -124,6 +128,8 @@ def get_role(role_id):
     ---
     tags:
       - Roles
+    security:
+      - Bearer: []
     parameters:
       - name: role_id
         in: path
@@ -150,6 +156,8 @@ def update_role(role_id):
     ---
     tags:
       - Roles
+    security:
+      - Bearer: []
     parameters:
       - name: role_id
         in: path
@@ -206,6 +214,8 @@ def delete_role(role_id):
     ---
     tags:
       - Roles
+    security:
+      - Bearer: []
     parameters:
       - name: role_id
         in: path
@@ -236,6 +246,8 @@ def get_permissions():
     ---
     tags:
       - Roles
+    security:
+      - Bearer: []
     responses:
       200:
         description: List of permissions retrieved successfully
