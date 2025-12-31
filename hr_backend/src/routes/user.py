@@ -39,6 +39,8 @@ def get_users():
     ---
     tags:
       - Users
+    security:
+      - Bearer: []
     parameters:
       - name: page
         in: query
@@ -82,6 +84,8 @@ def create_user():
     ---
     tags:
       - Users
+    security:
+      - Bearer: []
     parameters:
       - in: body
         name: body
@@ -171,6 +175,8 @@ def get_user(user_id):
     ---
     tags:
       - Users
+    security:
+      - Bearer: []
     parameters:
       - name: user_id
         in: path
@@ -200,6 +206,8 @@ def update_user(user_id):
     ---
     tags:
       - Users
+    security:
+      - Bearer: []
     parameters:
       - name: user_id
         in: path
@@ -277,6 +285,8 @@ def delete_user(user_id):
     ---
     tags:
       - Users
+    security:
+      - Bearer: []
     parameters:
       - name: user_id
         in: path
@@ -316,6 +326,8 @@ def assign_role_to_user(user_id):
     ---
     tags:
       - Users
+    security:
+      - Bearer: []
     parameters:
       - name: user_id
         in: path
@@ -369,6 +381,8 @@ def remove_role_from_user(user_id, role_id):
     ---
     tags:
       - Users
+    security:
+      - Bearer: []
     parameters:
       - name: user_id
         in: path
