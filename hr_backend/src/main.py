@@ -40,7 +40,7 @@ app = Flask(
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "dev-jwt-secret")
 
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=1)
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=15)
 app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
 
 # Babel Configuration
