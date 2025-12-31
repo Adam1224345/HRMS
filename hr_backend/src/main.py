@@ -12,14 +12,19 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flasgger import Swagger
 
+# ---------------------------------------------------
+# PATH CONFIGURATION
+# ---------------------------------------------------
 # This file is at: hr_backend/src/main.py
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
+
+# Matches: hr_backend/src/static
 STATIC_FOLDER = os.path.join(BASE_DIR, "static")
 
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
-# allow absolute imports (src.models, src.routes, etc.)
+# Allow absolute imports (src.models, src.routes, etc.)
 sys.path.insert(0, PROJECT_ROOT)
 
 # ---------------------------------------------------
@@ -27,8 +32,9 @@ sys.path.insert(0, PROJECT_ROOT)
 # ---------------------------------------------------
 app = Flask(
     __name__,
-    static_folder=STATIC_FOLDER,
-    static_url_path=""
+    static_folder=STATIC_FOLDER
+    # REMOVED: static_url_path="" 
+    # (This line was causing the 404 on /dashboard because it tried to find a file named 'dashboard')
 )
 
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
@@ -92,7 +98,7 @@ jwt = JWTManager(app)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 # ---------------------------------------------------
-# SWAGGER / API DOCS SETUP (Flasgger) with HTTP & HTTPS schemes
+# SWAGGER / API DOCS SETUP
 # ---------------------------------------------------
 swagger_config = {
     "headers": [],
@@ -120,12 +126,9 @@ swagger_config = {
         "name": "MIT",
         "url": "https://opensource.org/licenses/MIT"
     },
-    
     "ui_params": {
         "defaultModelsExpandDepth": -1
     },
-
-    # Show both HTTP and HTTPS schemes in Swagger UI
     "schemes": ["http", "https"],
     "securityDefinitions": {
         "Bearer": {
@@ -177,7 +180,7 @@ from src.socket_events import setup_socket_events
 setup_socket_events(socketio)
 
 # ---------------------------------------------------
-# BLUEPRINTS - IMPORT AFTER MODELS (Important!)
+# BLUEPRINTS
 # ---------------------------------------------------
 from src.routes.user import user_bp
 from src.routes.auth import auth_bp
@@ -205,7 +208,7 @@ app.register_blueprint(calendar_bp, url_prefix="/api")
 app.register_blueprint(audit_log_bp, url_prefix="/api")
 app.register_blueprint(notification_bp, url_prefix="/api")
 app.register_blueprint(lang_bp, url_prefix="/api")
-app.register_blueprint(document_bp)  # Defined in document.py as /api/documents
+app.register_blueprint(document_bp)
 
 if task_bp:
     app.register_blueprint(task_bp, url_prefix="/api")
@@ -218,14 +221,10 @@ if task_bp:
 def serve_frontend(path):
     file_path = os.path.join(STATIC_FOLDER, path)
 
-    if path and os.path.exists(file_path):
+    if path != "" and os.path.exists(file_path):
         return send_from_directory(STATIC_FOLDER, path)
 
-    index_file = os.path.join(STATIC_FOLDER, "index.html")
-    if os.path.exists(index_file):
-        return send_from_directory(STATIC_FOLDER, "index.html")
-
-    return "index.html not found", 404
+    return send_from_directory(STATIC_FOLDER, "index.html")
 
 # ---------------------------------------------------
 # RUN SERVER
@@ -234,8 +233,8 @@ if __name__ == "__main__":
     print("────────────────────────────────────────────")
     print(" HRMS Backend Starting…")
     print(" Using Neon PostgreSQL")
-    print(" Static Folder:", STATIC_FOLDER)
+    print(f" Static Folder: {STATIC_FOLDER}")
     print(" Swagger Docs: http://localhost:5000/apidocs/")
     print("────────────────────────────────────────────")
 
-    socketio.run(app, host="0.0.0.0", port=5000, debug=False)
+    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
